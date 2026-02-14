@@ -1,0 +1,28 @@
+# Data directories
+data/
+curated_db/
+
+# Archive
+archive/
+
+# Logs
+*.log
+
+# kdb+ runtime files
+*.q~
+*.q.bak
+
+# Database files
+sym
+sym.bak
+par.txt
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
