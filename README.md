@@ -2,7 +2,7 @@
 
 A lightweight, configuration-driven framework for managing analytical data pipelines in kdb+/q.
 
-Built for teams running 10-20+ analytical dashboards off a shared partitioned database where data arrives as CSVs from multiple upstream systems. The framework handles ingestion, validation, orchestration, and retention so that each application can focus on its own analytical logic.
+Built for teams running 10-20+ analytical applications off a shared partitioned database where data arrives as CSVs from multiple upstream systems. The framework handles ingestion, validation, orchestration, retention, and serving so that each application can focus on its own analytical logic.
 
 ## The Problem
 
@@ -16,21 +16,23 @@ Without shared infrastructure, each analytical application ends up with its own 
 - **Tracks everything.** An ingestion log records what was loaded, when, whether it succeeded or failed, and how many records. Persisted to the database so it survives restarts.
 - **Archives processed files.** CSVs move from the landing zone to a dated archive after successful ingestion.
 - **Manages retention.** Configurable policies prune old partitions — keep daily history for a year, monthly snapshots for two years, then purge.
-- **Supports dual environments.** Run prod and prod-parallel from the same codebase with different command line args. Test changes against real data before promoting.
+- **Provides a shared library.** Common analytical operations — hierarchy flattening, rolling statistics, period comparisons, point-in-time joins, pivoting, filtering — available as stateless functions any app or server can use.
+- **Supports server processes.** A cache framework lets server processes load tables from the database, apply transforms, hold results in memory, and refresh on a timer.
+- **Supports dual environments.** Run prod and prod-parallel from the same codebase with different command line args.
 
 ## What This Framework Does Not Do
 
-- **Application logic.** Each app owns its own transformations, aggregations, joins, and caching strategy. The framework provides tools (csv_loader, db_writer, validator); the app decides what to do with them.
+- **Application logic.** Each app owns its own transformations, aggregations, and serving strategy. The framework provides tools; the app decides what to do with them.
 - **Frontend.** No UI components. This is backend data infrastructure only.
 - **Real-time streaming.** Designed for batch/EOD analytical workloads where data arrives as files.
 
 ## Project Structure
 
 ```
-infrastructure/
+kdb-infra/
 ├── core/
 │   ├── validator.q           # Schema registry + validation rules
-│   ├── csv_loader.q          # Load → validate → type cast
+│   ├── csv_loader.q          # Load -> validate -> type cast
 │   ├── ingestion_log.q       # Ingestion tracking, persisted to DB
 │   └── db_writer.q           # Save to partitioned DB, enforce naming
 ├── orchestration/
@@ -39,60 +41,75 @@ infrastructure/
 │   └── monitoring.q          # Failure alerts, staleness, disk health
 ├── maintenance/
 │   └── retention_manager.q   # Partition cleanup per retention policy
+├── lib/
+│   ├── hierarchy.q           # Flatten hierarchical data
+│   ├── rolling.q             # Windowed statistics (moving avg, std, etc.)
+│   ├── filters.q             # Inclusion/exclusion filtering
+│   ├── dates.q               # AsOf resolution, business days, date ranges
+│   ├── comparison.q          # Period-over-period deltas and movers
+│   ├── pivot.q               # Long <-> wide reshaping
+│   └── temporal_join.q       # Point-in-time reference data joins
+├── server/
+│   ├── server_init.q         # Entry point for server processes
+│   └── cache.q               # Recipe-based cache management
 ├── schemas/                   # One file per source/derived table
-├── sources.q                  # Source → app → path → pattern → required
-└── init.q                     # Entry point, loads everything
+├── sources.q                  # Source -> app -> path -> pattern -> required
+└── init.q                     # Entry point for orchestrator processes
 ```
 
-Each application lives outside the framework:
+## Two Entry Points
 
+**Orchestrator** — ingests data, writes to the database:
+```bash
+q init.q -p 9000 -dbPath /data/databases/prod
 ```
-apps/
-└── myapp/
-    ├── data_refresh.q        # What to load, transform, save
-    └── server.q              # Hot cache, query endpoints
+
+**Server** — reads from the database, serves queries:
+```bash
+q server/server_init.q -p 9001 -dbPath /data/databases/prod
 ```
 
 ## Quick Start
 
-```bash
-cd infrastructure
-q init.q -p 9000 -dbPath /data/databases/prod
-```
-
+**Orchestrator side:**
 ```q
-/ Register your domain and app
-.dbWriter.addDomain[`mydom]
-\l ../apps/myapp/data_refresh.q
-.orchestrator.registerApp[`myapp; .myapp.refresh]
-
-/ Start
+.dbWriter.addDomain[`funding]
+\l ../apps/funding/collateral/data_refresh.q
+.orchestrator.registerApp[`funding_collateral; .funding.collateral.refresh]
 .orchestrator.start[]
 ```
 
-## Onboarding a New Source
+**Server side:**
+```q
+/ Register what to cache, how far back, and what transform to apply
+.cache.register[`collateral_flat; `funding_collateral_source; 365;
+  {[data] .hierarchy.flatten[data; `h_level1`h_level2`h_level3; `notional; enlist `date]}]
 
-1. Define a schema in `schemas/`:
-   ```q
-   .validator.registerSchema[`newsource;
-     `columns`types`mandatory!(`date`business`amount; "dsf"; `date`amount)]
-   ```
+.cache.register[`collateral_by_ccy; `funding_collateral_by_currency; 90; ::]
 
-2. Add a row to `sources.q`:
-   ```q
-   `source_config insert (`newsource; `myapp; 1b; `:/data/csv; "newsource_*.csv"; ","; `daily)
-   ```
+.cache.loadAll[]
+.cache.startRefresh[600000]
 
-3. Use it in your app's `data_refresh.q`:
-   ```q
-   data:.csv.loadStrict[`newsource; filepath; ","]
-   ```
+/ Query cached data
+data:.cache.get[`collateral_by_ccy]
+filtered:.filters.applyBoth[data; (enlist `currency)!(enlist `USD`EUR); ::]
+```
 
-No framework code changes needed.
+## Shared Library
+
+The `lib/` modules are stateless functions — table in, table out. Used by both data_refresh scripts and server processes.
+
+| Module | Purpose |
+|--------|---------|
+| `hierarchy.q` | Flatten wide level columns to parent-child format |
+| `rolling.q` | Moving average, std deviation, sum, min, max, median |
+| `filters.q` | Apply inclusion filters and exclusions on any table |
+| `dates.q` | AsOf/previous date resolution, business day logic |
+| `comparison.q` | Period-over-period deltas, top movers, new/dropped entries |
+| `pivot.q` | Reshape long to wide and wide to long |
+| `temporal_join.q` | Point-in-time joins for time-varying reference data |
 
 ## Dual Environment
-
-Run prod and QA side by side against the same raw data:
 
 ```bash
 # Prod
@@ -106,7 +123,7 @@ Same code, separate databases, independent orchestrators.
 
 ## Documentation
 
-See [TECHNICAL.md](TECHNICAL.md) for detailed module documentation, the orchestrator flow, application patterns, retention policy, and naming conventions.
+See [TECHNICAL.md](TECHNICAL.md) for detailed module documentation, the orchestrator flow, library API reference, cache patterns, and naming conventions.
 
 ## Requirements
 
