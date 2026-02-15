@@ -1,7 +1,10 @@
 / retention_manager.q
-/ Enforce retention policy on the partitioned database
+/ Enforce retention policy on partitions
+/ Zone 1 (0-1yr): keep all daily
+/ Zone 2 (1-2yr): keep 1st-of-month for detailed, keep all for aggregated
+/ Zone 3 (2yr+): purge all except protected
 /
-/ Dependencies: db_writer.q (for dbPath)
+/ Dependencies: db_writer.q
 
 \d .retention
 
@@ -11,7 +14,6 @@
 
 dailyRetentionDays:365
 monthlyRetentionDays:730
-
 tableClassification:()!()
 protectedTables:enlist `infra_ingestion_log
 
@@ -51,9 +53,11 @@ run:{[asOf]
   zone2:allDates where (allDates < oneYearAgo) & allDates >= twoYearsAgo;
   zone3:allDates where allDates < twoYearsAgo;
 
+  / Zone 3: Purge all (except protected)
   if[count zone3;
     {[dbPath; dt] purgePartition[dbPath; dt]}[dbPath] each zone3];
 
+  / Zone 2: Monthly snapshot logic for detailed tables
   if[count zone2;
     months:`month$zone2;
     byMonth:group months;
@@ -75,7 +79,6 @@ purgePartition:{[dbPath; dt]
   partPath:` sv dbPath , `$string dt;
   tables:key partPath;
   if[0 = count tables; :()];
-
   {[partPath; tbl]
     if[not `protected ~ getClass tbl;
       tblPath:` sv partPath , tbl;
@@ -87,7 +90,6 @@ pruneDetailedTables:{[dbPath; dt]
   partPath:` sv dbPath , `$string dt;
   tables:key partPath;
   if[0 = count tables; :()];
-
   {[partPath; tbl]
     if[`detailed ~ getClass tbl;
       tblPath:` sv partPath , tbl;
@@ -113,13 +115,13 @@ dryRun:{[asOf]
 
   {[plan; dt; oneYearAgo; twoYearsAgo; allDates]
     $[dt >= oneYearAgo;
-      `plan insert (dt; `zone1_recent; `keep_all; "Within daily retention - keep everything");
+      `plan insert (dt; `zone1_recent; `keep_all; "Within daily retention");
       dt >= twoYearsAgo;
       [
         monthDates:asc allDates where (`month$allDates) = `month$dt;
         $[dt = first monthDates;
           `plan insert (dt; `zone2_monthly; `keep_all; "Monthly snapshot - keep everything");
-          `plan insert (dt; `zone2_monthly; `prune_detailed; "Remove detailed, keep aggregated + protected")]
+          `plan insert (dt; `zone2_monthly; `prune_detailed; "Remove detailed, keep aggregated")]
       ];
       `plan insert (dt; `zone3_old; `purge; "Beyond monthly retention - remove all except protected")];
     plan

@@ -73,43 +73,41 @@ writePartition:{[dt; data]
 markProcessing:{[source; dt; fp]
   existing:select from ingestion_log where source=source, date=dt;
   if[count existing;
-    ![`ingestion_log;
-      enlist (=;`source;enlist source) , enlist (=;`date;enlist dt);
-      0b;
-      `status`filepath`startTime`retryCount!
-        (`processing; fp; .z.p; first[existing`retryCount]+1i)];
+    update status:`processing, filepath:fp, startTime:.z.p, retryCount:1+first retryCount
+      from `ingestion_log where source=source, date=dt;
     :()];
-  `ingestion_log insert (source; dt; `processing; fp; 0; ""; .z.p; 0Np; 0i);
+  `ingestion_log insert (source; dt; `processing; fp; 0j; ""; .z.p; 0Np; 0i);
  }
 
 markCompleted:{[source; dt; recCount]
-  ![`ingestion_log;
-    enlist (=;`source;enlist source) , enlist (=;`date;enlist dt);
-    0b;
-    `status`recordCount`endTime`errorMsg!(`completed; recCount; .z.p; "")];
+  update status:`completed, recordCount:recCount, endTime:.z.p
+    from `ingestion_log where source=source, date=dt;
  }
 
 markFailed:{[source; dt; errMsg]
-  ![`ingestion_log;
-    enlist (=;`source;enlist source) , enlist (=;`date;enlist dt);
-    0b;
-    `status`endTime`errorMsg!(`failed; .z.p; errMsg)];
+  update status:`failed, errorMsg:errMsg, endTime:.z.p
+    from `ingestion_log where source=source, date=dt;
  }
 
 / ============================================================================
-/ QUERY OPERATIONS
+/ READ OPERATIONS
 / ============================================================================
 
 isProcessed:{[source; dt]
   0 < count select from ingestion_log where source=source, date=dt, status=`completed
  }
 
-getStatus:{[source; dt]
-  select from ingestion_log where source=source, date=dt
+completedSources:{[dt]
+  exec source from ingestion_log where date=dt, status=`completed
  }
 
-getBySource:{[source]
-  select from ingestion_log where source=source
+allCompleted:{[sources; dt]
+  done:completedSources[dt];
+  all sources in done
+ }
+
+completedSince:{[ts]
+  select from ingestion_log where status=`completed, endTime >= ts
  }
 
 getFailed:{[]
@@ -120,40 +118,8 @@ getByDate:{[dt]
   select from ingestion_log where date=dt
  }
 
-getLatest:{[]
-  select last status, last date, last recordCount, last endTime, last errorMsg
-    by source from ingestion_log
- }
-
-allCompleted:{[sources; dt]
-  completed:exec source from ingestion_log where date=dt, status=`completed;
-  all sources in completed
- }
-
-completedSources:{[dt]
-  exec source from ingestion_log where date=dt, status=`completed
- }
-
-completedSince:{[ts]
-  select source, date, filepath from ingestion_log
-    where status=`completed, endTime >= ts
- }
-
-/ ============================================================================
-/ MAINTENANCE
-/ ============================================================================
-
-purgeOld:{[days]
-  cutoff:.z.d - days;
-  delete from `ingestion_log where date < cutoff;
- }
-
 stats:{[]
-  select records:count i,
-    completed:sum status=`completed,
-    failed:sum status=`failed,
-    processing:sum status=`processing
-    by source from ingestion_log
+  select count i by status from ingestion_log
  }
 
 \d .

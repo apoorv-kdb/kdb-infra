@@ -1,6 +1,6 @@
 / init.q
-/ Single entry point for the infrastructure framework
-/ Loads all modules in dependency order and initializes the system
+/ Entry point for the orchestrator process
+/ For domain query servers, use server/server_init.q instead
 /
 / Usage:
 /   Prod:          q init.q -p 9000 -dbPath /data/databases/prod -archivePath /data/archive
@@ -9,11 +9,17 @@
 /
 / Command line args:
 /   -p              port (standard q flag)
-/   -dbPath         path to partitioned database (default: curated_db)
-/   -archivePath    path to CSV archive directory (default: /data/archive)
+/   -dbPath         path to partitioned database (default: {ROOT}/curated_db)
+/   -archivePath    path to CSV archive directory (default: {ROOT}/archive)
 /   -timerInterval  orchestrator interval in ms (default: 3600000 = 1 hour)
 /   -dailyRetention days to keep daily partitions (default: 365)
 /   -monthlyRetention days to keep monthly snapshots (default: 730)
+
+/ ============================================================================
+/ ROOT DIRECTORY
+/ ============================================================================
+
+ROOT:first system "pwd"
 
 / ============================================================================
 / PARSE COMMAND LINE ARGS
@@ -21,8 +27,8 @@
 
 opts:.Q.opt .z.x;
 
-argDbPath:$[`dbPath in key opts; hsym `$first opts`dbPath; `:curated_db];
-argArchivePath:$[`archivePath in key opts; hsym `$first opts`archivePath; `:/data/archive];
+argDbPath:$[`dbPath in key opts; hsym `$first opts`dbPath; hsym `$ROOT,"/curated_db"];
+argArchivePath:$[`archivePath in key opts; hsym `$first opts`archivePath; hsym `$ROOT,"/archive"];
 argTimerInterval:$[`timerInterval in key opts; "J"$first opts`timerInterval; 3600000];
 argDailyRetention:$[`dailyRetention in key opts; "J"$first opts`dailyRetention; 365];
 argMonthlyRetention:$[`monthlyRetention in key opts; "J"$first opts`monthlyRetention; 730];
@@ -33,56 +39,85 @@ argMonthlyRetention:$[`monthlyRetention in key opts; "J"$first opts`monthlyReten
 
 show "========================================";
 show "Loading KDB+ Infrastructure Framework";
+show "ROOT: ",ROOT;
 show "========================================";
 
+/ --- Layer 1: No dependencies ---
 show "Loading core/validator.q";
-\l core/validator.q
+system "l ",ROOT,"/core/validator.q";
 
 show "Loading core/ingestion_log.q";
-\l core/ingestion_log.q
+system "l ",ROOT,"/core/ingestion_log.q";
 
+/ --- Layer 2: Depends on Layer 1 ---
 show "Loading core/csv_loader.q";
-\l core/csv_loader.q
+system "l ",ROOT,"/core/csv_loader.q";
 
 show "Loading core/db_writer.q";
-\l core/db_writer.q
+system "l ",ROOT,"/core/db_writer.q";
 
-show "Loading sources.q";
-\l sources.q
-
-show "Loading schemas...";
-schemaFiles:key `:schemas;
-schemaFiles:schemaFiles where schemaFiles like "*.q";
-{show "  Loading schemas/",string x; system "l schemas/",string x} each schemaFiles;
-
+/ --- Layer 3: Depends on core ---
 show "Loading monitoring/monitoring.q";
-\l monitoring/monitoring.q
+system "l ",ROOT,"/monitoring/monitoring.q";
 
 show "Loading orchestration/orchestrator.q";
-\l orchestration/orchestrator.q
+system "l ",ROOT,"/orchestration/orchestrator.q";
 
 show "Loading maintenance/retention_manager.q";
-\l maintenance/retention_manager.q
+system "l ",ROOT,"/maintenance/retention_manager.q";
+
+/ ============================================================================
+/ LOAD APPS — walk apps/{domain}/{app}/, load each config.q + data_refresh.q
+/ ============================================================================
+
+show "";
+show "Loading apps...";
+appRoot:hsym `$ROOT,"/apps";
+domains:key appRoot;
+domains:domains where not domains in `` `.gitkeep;
+
+{[domain]
+  domainPath:ROOT,"/apps/",string domain;
+  entries:key hsym `$domainPath;
+  entries:entries where not entries in `` `.gitkeep;
+
+  / Load each subdirectory that has a config.q (these are apps)
+  {[domainPath; entry]
+    entryPath:domainPath,"/",string entry;
+
+    / Skip files (like server.q) — only process directories
+    configFile:entryPath,"/config.q";
+    refreshFile:entryPath,"/data_refresh.q";
+
+    if[not () ~ @[key; hsym `$configFile; {[e] ()}];
+      / Load data_refresh first (defines the function config.q registers)
+      if[not () ~ @[key; hsym `$refreshFile; {[e] ()}];
+        show "  Loading ",refreshFile;
+        @[system; "l ",refreshFile; {[e] show "    [WARN] Failed: ",e}]];
+
+      / Load config (registers sources, schemas, retention, app)
+      show "  Loading ",configFile;
+      @[system; "l ",configFile; {[e] show "    [WARN] Failed: ",e}]];
+  }[domainPath] each entries;
+ } each domains;
 
 / ============================================================================
 / INITIALIZE
 / ============================================================================
 
-.dbWriter.setDbPath[argDbPath];
-@[{system "mkdir -p ",1 _ string x}; argDbPath; {[e]}];
-
-show "Initializing ingestion log...";
 .ingestionLog.init[];
-@[.ingestionLog.reload; argDbPath; {[e] show "No prior ingestion_log found, starting fresh"}];
+.dbWriter.setDbPath[argDbPath];
+.dbWriter.addDomain[`infra];
 
-.orchestrator.setInterval[argTimerInterval];
 .orchestrator.setArchivePath[argArchivePath];
-@[{system "mkdir -p ",1 _ string x}; argArchivePath; {[e]}];
-
+.orchestrator.setInterval[argTimerInterval];
 .retention.setDailyRetention[argDailyRetention];
 .retention.setMonthlyRetention[argMonthlyRetention];
 
-.dbWriter.addDomain[`infra];
+.ingestionLog.reload[argDbPath];
+
+@[{system "mkdir -p ",1 _ string x}; argDbPath; {[e]}];
+@[{system "mkdir -p ",1 _ string x}; argArchivePath; {[e]}];
 
 / ============================================================================
 / STARTUP SUMMARY
@@ -91,22 +126,15 @@ show "Initializing ingestion log...";
 show "";
 show "========================================";
 show "Infrastructure loaded successfully";
-show "========================================";
-show "Database:          ",string argDbPath;
-show "Archive:           ",string argArchivePath;
+show "ROOT:              ",ROOT;
+show "Database path:     ",string argDbPath;
+show "Archive path:      ",string argArchivePath;
 show "Timer interval:    ",string[argTimerInterval],"ms";
-show "Daily retention:   ",string[argDailyRetention]," days";
-show "Monthly retention: ",string[argMonthlyRetention]," days";
-show "Sources configured:",string count source_config;
+show "Sources registered:",string count .orchestrator.source_config;
 show "Schemas registered:",string count .validator.schemas;
+show "Apps registered:   ",string count .orchestrator.appRegistry;
 show "========================================";
 show "";
 show "Next steps:";
-show "  1. Register app domains:";
-show "     .dbWriter.addDomain[`mydom]";
-show "  2. Load app code:";
-show "     \\l ../apps/myapp/data_refresh.q";
-show "  3. Register app with orchestrator:";
-show "     .orchestrator.registerApp[`myapp; .myapp.refresh]";
-show "  4. Start orchestrator:";
-show "     .orchestrator.start[]";
+show "  Start orchestrator:  .orchestrator.start[]";
+show "  Or run manually:     .orchestrator.run[]";

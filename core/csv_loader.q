@@ -1,58 +1,70 @@
 / csv_loader.q
-/ Load CSV files, validate against schema, type cast to proper types
-/ Returns clean, typed tables ready for use by applications
+/ Load CSV files: read as strings → validate schema → type cast → return clean table
+/ Looks up schema from validator registry
 /
 / Dependencies: validator.q
 
 \d .csv
 
 / ============================================================================
-/ LOAD AND CAST
+/ MAIN LOAD FUNCTION
 / ============================================================================
 
+/ Load a CSV file with validation and type casting
+/ Args:
+/   source: symbol - source name (must have schema registered in validator)
+/   filepath: symbol or string - path to CSV file
+/   delimiter: char - CSV delimiter (default ",")
+/ Returns: typed table (or throws on failure)
 load:{[source; filepath; delimiter]
-  if[(::) ~ delimiter; delimiter:","];
+  fp:$[-11h = type filepath; filepath; hsym `$filepath];
 
+  / Check file exists
+  if[() ~ key fp; '"File not found: ",string fp];
+
+  / Look up schema
   schema:.validator.getSchema[source];
-  if[(::) ~ schema;
-    :`success`data`error`recordCount!(0b; (); "Unknown source: ",string source; 0)];
+  if[(::) ~ schema; '"No schema registered for source: ",string source];
 
-  raw:@[{[fp; delim] (delim; enlist delim) 0: fp}; (hsym `$string filepath; delimiter);
-    {[e] `ERR}];
-  if[`ERR ~ raw;
-    :`success`data`error`recordCount!(0b; (); "Failed to read file"; 0)];
-  if[0 = count raw;
-    :`success`data`error`recordCount!(0b; (); "File is empty"; 0)];
+  / Load as strings (all columns as strings)
+  raw:("*"; enlist delimiter) 0: fp;
 
-  if[`mandatory in key schema;
-    missingMandatory:schema[`mandatory] except cols raw;
-    if[count missingMandatory;
-      :`success`data`error`recordCount!(0b; ();
-        "Missing mandatory columns: ",", " sv string missingMandatory; 0)]];
+  / Filter to expected columns only (drop extras)
+  expectedCols:schema`columns;
+  keepCols:expectedCols where expectedCols in cols raw;
+  if[0 = count keepCols; '"No expected columns found in file"];
+  raw:keepCols#raw;
 
-  keepCols:schema[`columns] inter cols raw;
-  filtered:keepCols # raw;
-
-  validation:.validator.validateSchema[filtered; schema];
+  / Validate
+  validation:.validator.validateSchema[raw; schema];
   if[not validation`valid;
-    :`success`data`error`recordCount!(0b; ();
-      "Validation failed: ","; " sv validation`errors; 0)];
+    '"Validation failed: ","; " sv validation`errors];
 
-  typeMap:schema[`columns]!schema`types;
-  typed:castColumns[filtered; typeMap; keepCols];
-  if[99h = type typed;
-    if[`error in key typed;
-      :`success`data`error`recordCount!(0b; (); typed`error; 0)]];
+  / Type cast
+  types:schema`types;
+  typeMap:expectedCols!types;
+  typeMap:keepCols#typeMap;
+  tbl:typeCast[raw; typeMap];
 
-  `success`data`error`recordCount!(1b; typed; ""; count typed)
+  tbl
  }
 
-castColumns:{[tbl; typeMap; castCols]
-  {[typeMap; t; col]
-    casted:@[typeMap[col]$; t col; {[e] `FAIL}];
-    if[`FAIL ~ casted; :`error!("Cast failed: ",string col)];
-    ![t; (); 0b; (enlist col)!(enlist casted)]
-  }[typeMap]/[tbl; castCols]
+/ ============================================================================
+/ TYPE CASTING
+/ ============================================================================
+
+/ Cast columns from strings to target types
+/ Args: tbl (table), typeMap (dict of col -> type char)
+/ Returns: typed table
+typeCast:{[tbl; typeMap]
+  castCols:key typeMap;
+  {[tbl; col; typeMap]
+    typ:typeMap col;
+    if[typ = "*"; :tbl];  / Skip string columns
+    casted:@[{[t; v] t$v}[typ]; tbl col;
+      {[col; e] '"Cast failed: ",string col}[col]];
+    ![tbl; (); 0b; (enlist col)!(enlist casted)]
+  }[; ; typeMap]/[tbl; castCols]
  }
 
 / ============================================================================
@@ -62,9 +74,9 @@ castColumns:{[tbl; typeMap; castCols]
 loadDefault:{[source; filepath] load[source; filepath; ","]}
 
 loadStrict:{[source; filepath; delimiter]
-  res:load[source; filepath; delimiter];
-  if[not res`success; 'res`error];
-  res`data
+  res:@[load; (source; filepath; delimiter); {[e] `error`msg!(1b; e)}];
+  if[99h = type res; 'res`msg];
+  res
  }
 
 \d .

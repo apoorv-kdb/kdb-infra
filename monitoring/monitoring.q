@@ -2,7 +2,7 @@
 / Health monitoring - checks ingestion_log for failures and staleness, triggers alerts
 / Called at the end of each orchestrator tick
 /
-/ Dependencies: ingestion_log.q, sources.q
+/ Dependencies: ingestion_log.q
 
 \d .monitoring
 
@@ -25,7 +25,7 @@ minDiskSpaceGB:50
 / CHECKS
 / ============================================================================
 
-runChecks:{[]
+checkAll:{[]
   checkFailures[];
   checkStaleness[];
   checkDiskSpace[];
@@ -45,7 +45,7 @@ checkFailures:{[]
  }
 
 checkStaleness:{[]
-  dailySources:select source, app from source_config where frequency=`daily;
+  dailySources:select source, app from .orchestrator.source_config where frequency=`daily;
   if[0 = count dailySources; :()];
 
   cutoff:.z.p - `long$stalenessThresholdHours * 3600000000000;
@@ -103,7 +103,7 @@ dailyReport:{[dt]
   entries:.ingestionLog.getByDate[dt];
   completed:select from entries where status=`completed;
   failed:select from entries where status=`failed;
-  pending:exec source from source_config where
+  pending:exec source from .orchestrator.source_config where
     not source in (exec source from entries where status=`completed);
   `date`completed`failed`pendingSources!(dt; completed; failed; pending)
  }

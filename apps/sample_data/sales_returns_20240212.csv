@@ -1,0 +1,5 @@
+date,region,product,quantity,reason
+2024.02.12,AMER,WidgetA,5,defective
+2024.02.12,AMER,WidgetB,2,wrong_item
+2024.02.12,EMEA,WidgetA,10,defective
+2024.02.12,APAC,WidgetC,3,damaged

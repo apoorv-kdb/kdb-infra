@@ -1,10 +1,5 @@
 / rolling.q
-/ Windowed statistics on time series data
-/ Moving average, standard deviation, sum, min, max over configurable windows
-/
-/ All functions expect data sorted by date. If grouping is needed
-/ (e.g. rolling avg per business), use the *By variants.
-/
+/ Windowed statistics over time series data
 / Stateless: table in, table out
 
 \d .rolling
@@ -13,133 +8,75 @@
 / CORE WINDOW FUNCTIONS
 / ============================================================================
 
-/ Moving average
-/ Args: vals (numeric list), window (int)
-/ Returns: float list (nulls for incomplete windows)
-avg:{[vals; window]
-  n:count vals;
-  $[window > n; n#0Nf;
-    {[w; v; i] $[i < w - 1; 0Nf; avg (neg w)#(i+1)#v]}[window; vals] each til n]
- }
-
-/ Moving sum
-movSum:{[vals; window]
-  n:count vals;
-  $[window > n; n#0Nf;
-    {[w; v; i] $[i < w - 1; 0Nf; sum (neg w)#(i+1)#v]}[window; vals] each til n]
- }
-
-/ Moving standard deviation
-movStd:{[vals; window]
-  n:count vals;
-  $[window > n; n#0Nf;
-    {[w; v; i] $[i < w - 1; 0Nf; dev (neg w)#(i+1)#v]}[window; vals] each til n]
- }
-
-/ Moving min
-movMin:{[vals; window]
-  n:count vals;
-  $[window > n; n#0Nf;
-    {[w; v; i] $[i < w - 1; 0Nf; min (neg w)#(i+1)#v]}[window; vals] each til n]
- }
-
-/ Moving max
-movMax:{[vals; window]
-  n:count vals;
-  $[window > n; n#0Nf;
-    {[w; v; i] $[i < w - 1; 0Nf; max (neg w)#(i+1)#v]}[window; vals] each til n]
- }
-
-/ Moving median
-movMedian:{[vals; window]
-  n:count vals;
-  $[window > n; n#0Nf;
-    {[w; v; i] $[i < w - 1; 0Nf; med (neg w)#(i+1)#v]}[window; vals] each til n]
- }
+avg:{[vals; window] mavg[window; vals]}
+movSum:{[vals; window] msum[window; vals]}
+movStd:{[vals; window] mdev[window; vals]}
+movMin:{[vals; window] mmin[window; vals]}
+movMax:{[vals; window] mmax[window; vals]}
+movMedian:{[vals; window] mmed[window; vals]}
 
 / ============================================================================
 / TABLE OPERATIONS
 / ============================================================================
 
-/ Add a rolling statistic column to a table
-/ Data must be sorted by date
+/ Add a single rolling statistic to a table
 / Args:
-/   data: table (sorted by date)
+/   data: table (must be sorted by date)
 /   col: symbol - column to compute over
 /   window: int - window size in rows
 /   fn: symbol - one of `avg`sum`std`min`max`median
-/   newCol: symbol - name for the new column
-/ Returns: table with new column appended
-addRolling:{[data; col; window; fn; newCol]
+/   outCol: symbol - output column name
+/ Returns: table with new column added
+addRolling:{[data; col; window; fn; outCol]
   vals:data col;
-  result:$[fn;
-    `avg;    .rolling.avg[vals; window];
-    `sum;    movSum[vals; window];
-    `std;    movStd[vals; window];
-    `min;    movMin[vals; window];
-    `max;    movMax[vals; window];
-    `median; movMedian[vals; window];
+  computed:$[fn;
+    `avg;   .rolling.avg[vals; window];
+    `sum;   .rolling.movSum[vals; window];
+    `std;   .rolling.movStd[vals; window];
+    `min;   .rolling.movMin[vals; window];
+    `max;   .rolling.movMax[vals; window];
+    `median;.rolling.movMedian[vals; window];
     '"Unknown rolling function: ",string fn];
-  ![data; (); 0b; (enlist newCol)!(enlist result)]
+  ![data; (); 0b; (enlist outCol)!(enlist computed)]
  }
 
 / Add multiple rolling statistics at once
 / Args:
-/   data: table (sorted by date)
-/   specs: list of dicts, each with `col`window`fn`newCol
-/ Returns: table with all new columns appended
+/   data: table
+/   specs: list of dicts with `col`window`fn`outCol
+/ Returns: table with all new columns
 addMultiple:{[data; specs]
-  {[d; spec]
-    addRolling[d; spec`col; spec`window; spec`fn; spec`newCol]
+  {[data; spec]
+    addRolling[data; spec`col; spec`window; spec`fn; spec`outCol]
   }/[data; specs]
  }
 
-/ ============================================================================
-/ GROUPED OPERATIONS
-/ ============================================================================
-
-/ Add a rolling statistic within groups
-/ Sorts each group by date, computes rolling, reassembles
+/ Grouped rolling (e.g. per business unit)
 / Args:
 /   data: table
-/   groupCols: symbol list - columns to group by (e.g. `business`product)
-/   col: symbol - column to compute over
-/   window: int - window size
-/   fn: symbol - rolling function name
-/   newCol: symbol - name for new column
-/ Returns: table with new column (same row order as input)
-addRollingBy:{[data; groupCols; col; window; fn; newCol]
-  / Add original index to preserve order
-  data:update __idx:i from data;
-
-  / Group, sort each by date, compute rolling, reassemble
-  groups:?[data; (); {x!x} groupCols; (enlist `rows)!(enlist (ungroup; (enlist; til; (count; `i))))];
-
-  result:raze {[data; col; window; fn; newCol; grp]
-    subset:`date xasc data grp`rows;
-    addRolling[subset; col; window; fn; newCol]
-  }[data; col; window; fn; newCol] each 0!groups;
-
-  / Restore original order
-  result:`__idx xasc result;
-  ![result; (); 0b; enlist `__idx]
+/   groupCol: symbol - grouping column
+/   col, window, fn, outCol: same as addRolling
+/ Returns: table with rolling stat computed within each group
+addRollingBy:{[data; groupCol; col; window; fn; outCol]
+  groups:distinct data groupCol;
+  result:raze {[data; groupCol; col; window; fn; outCol; grp]
+    subset:`date xasc select from data where (groupCol#data)[groupCol] = grp;
+    addRolling[subset; col; window; fn; outCol]
+  }[data; groupCol; col; window; fn; outCol] each groups;
+  `date xasc result
  }
 
 / ============================================================================
 / CONVENIENCE
 / ============================================================================
 
-/ Common rolling specs builder
-/ Args:
-/   col: symbol - column to compute over
-/   window: int - window size
-/ Returns: list of spec dicts for avg, std, min, max
+/ Generate standard specs (avg, std, min, max) for a column + window
 standardSpecs:{[col; window]
-  prefix:string[col],"_",string[window],"d_";
-  (`col`window`fn`newCol!(col; window; `avg; `$prefix,"avg");
-   `col`window`fn`newCol!(col; window; `std; `$prefix,"std");
-   `col`window`fn`newCol!(col; window; `min; `$prefix,"min");
-   `col`window`fn`newCol!(col; window; `max; `$prefix,"max"))
+  suffixes:`avg`std`min`max;
+  fns:`avg`std`min`max;
+  {[col; window; suffix; fn]
+    `col`window`fn`outCol!(col; window; fn; `$string[col],"_",string[window],"d_",string suffix)
+  }[col; window] ./: flip (suffixes; fns)
  }
 
 \d .
