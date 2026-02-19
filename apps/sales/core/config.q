@@ -13,11 +13,11 @@
 
 .orchestrator.addSources[
   ((`source`app`required`directory`filePattern`delimiter`frequency)!
-    (`sales_transactions; `sales_core; 1b; `:/data/csv; "sales_transactions_*.csv"; ","; `daily))
+    (`sales_transactions; `sales_core; 1b; hsym `$"C:/data/csv"; "sales_transactions_*.csv"; ","; `daily))
  ];
 
 / ============================================================================
-/ SCHEMAS — source
+/ SCHEMAS - source
 / ============================================================================
 
 .validator.registerSchema[`sales_transactions;
@@ -28,7 +28,7 @@
  ];
 
 / ============================================================================
-/ SCHEMAS — derived
+/ SCHEMAS - derived
 / ============================================================================
 
 .validator.registerSchema[`sales_by_region;

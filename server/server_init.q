@@ -8,7 +8,7 @@
 / ROOT DIRECTORY
 / ============================================================================
 
-ROOT:first system "pwd"
+ROOT:rtrim ssr[first system $[.z.o like "w*"; "echo %CD%"; "pwd"]; "\\"; "/"]
 
 / ============================================================================
 / PARSE COMMAND LINE ARGS
@@ -46,7 +46,7 @@ show "Loading server/cache.q";
 system "l ",ROOT,"/server/cache.q";
 
 / ============================================================================
-/ STUBS — so app config.q loads cleanly in server context
+/ STUBS - so app config.q loads cleanly in server context
 / ============================================================================
 
 if[not `orchestrator in key `.;
@@ -79,7 +79,7 @@ loadDomainConfigs:{[dom]
     configFile:domainPath,"/",string[entry],"/config.q";
     if[not () ~ @[key; hsym `$configFile; {[e] ()}];
       show "  Loading ",configFile;
-      @[system; "l ",configFile; {[e] show "    [WARN] Failed: ",e}]];
+      @[system; "l ",configFile; {[e] show "    [WARN] Failed: \",e}]];
   }[domainPath] each entries;
  }
 

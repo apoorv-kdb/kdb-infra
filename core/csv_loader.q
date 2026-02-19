@@ -9,13 +9,14 @@
 
 .csv.typeCast:{[tbl; typeMap]
   castCols:key typeMap;
-  {[typeMap; tbl; col]
+  castVals:{[typeMap; tbl; col]
     typ:typeMap col;
-    if[typ = "*"; :tbl];
-    casted:@[{[t; v] t$v}[typ]; tbl col;
-      {[col; e] '"Cast failed: ",string col}[col]];
-    ![tbl; (); 0b; (enlist col)!(enlist casted)]
-  }[typeMap]/[tbl; castCols]
+    $[typ = "*";
+      tbl col;
+      @[{[t; v] t$v}[lower typ]; tbl col;
+        {[col; e] '"Cast failed: ",string[col],": ",e}[col]]]
+  }[typeMap; tbl] each castCols;
+  flip castCols!castVals
  }
 
 / ============================================================================
@@ -30,27 +31,31 @@
 / Returns: typed table (or throws on failure)
 .csv.loadCSV:{[src; filepath; delim]
   fp:$[-11h = type filepath; filepath; hsym `$filepath];
-
   if[() ~ key fp; '"File not found: ",string fp];
 
   schema:.validator.getSchema[src];
   if[(::) ~ schema; '"No schema registered for source: ",string src];
 
-  raw:("*"; enlist delim) 0: fp;
+  / ensure delim is a char not a string
+  delim:first delim;
+
+  / read all columns as strings - one * per expected column
+  raw:((count schema`columns)#"*"; enlist delim) 0: fp;
 
   expectedCols:schema`columns;
   keepCols:expectedCols where expectedCols in cols raw;
   if[0 = count keepCols; '"No expected columns found in file"];
   raw:keepCols#raw;
 
-  validation:.validator.validateSchema[raw; schema];
-  if[not validation`valid;
-    '"Validation failed: ","; " sv validation`errors];
-
+  / Cast first, then validate on typed data
   types:schema`types;
   typeMap:expectedCols!types;
   typeMap:keepCols#typeMap;
   tbl:.csv.typeCast[raw; typeMap];
+
+  validation:.validator.validateSchema[tbl; schema];
+  if[not validation`valid;
+    '"Validation failed: ","; " sv validation`errors];
 
   tbl
  }

@@ -8,8 +8,6 @@
 / LOG TABLE
 / ============================================================================
 
-.ingestionLog.persistTableName:`infra_ingestion_log
-
 .ingestionLog.init:{[]
   `.ingestionLog.tbl set ([]
     source:`symbol$();
@@ -25,21 +23,14 @@
  }
 
 .ingestionLog.reload:{[dbPath]
-  allDates:@[key; dbPath; {[e] `date$()}];
-  if[0 = count allDates; :.ingestionLog.init[]];
-
-  loaded:@[
-    {[dbPath; tblName]
-      system "l ",1 _ string dbPath;
-      if[tblName in tables[];
-        `.ingestionLog.tbl set value tblName;
-        :1b];
-      :0b
-    };
-    (dbPath; .ingestionLog.persistTableName);
-    {[e] 0b}];
-
-  if[not loaded; .ingestionLog.init[]];
+  @[{[dbPath]
+    allDates:key dbPath;
+    if[0 = count allDates; :.ingestionLog.init[]];
+    system "l ",1 _ string dbPath;
+    if[`infra_ingestion_log in tables[];
+      `.ingestionLog.tbl set value `infra_ingestion_log];
+    if[not `.ingestionLog.tbl in key `.; .ingestionLog.init[]];
+  }; dbPath; {[e] .ingestionLog.init[]}];
  }
 
 / ============================================================================
@@ -57,10 +48,10 @@
 
 .ingestionLog.persistPartition:{[dt; data]
   dbPath:.dbWriter.dbPath;
-  partPath:` sv dbPath , `$string[dt] , .ingestionLog.persistTableName , `;
+  partPath:` sv (dbPath; `$string dt; `infra_ingestion_log; `);
   enumData:@[{[db; d] .Q.en[db; d]}[dbPath]; data; {[e] `ENUM_FAIL}];
   if[not `ENUM_FAIL ~ enumData;
-    @[{[pp; d] pp set d}; (partPath; enumData); {[e] show "ingestion_log persist failed: ",e}]];
+    .[{[pp; d] pp set d}; (partPath; enumData); {[e] show "ingestion_log persist failed: ",e}]];
  }
 
 / ============================================================================
@@ -96,15 +87,6 @@
 
 .ingestionLog.completedSources:{[dt]
   exec source from .ingestionLog.tbl where date = dt, status = `completed
- }
-
-.ingestionLog.allCompleted:{[srcs; dt]
-  done:.ingestionLog.completedSources[dt];
-  all srcs in done
- }
-
-.ingestionLog.completedSince:{[ts]
-  select from .ingestionLog.tbl where status = `completed, endTime >= ts
  }
 
 .ingestionLog.getFailed:{[]

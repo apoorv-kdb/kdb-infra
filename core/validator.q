@@ -29,8 +29,10 @@
     `valid`message!(0b; string[col]," has ",string[nullCount]," nulls")]
  }
 
+/ typ is uppercase e.g. "D","S","J" - lowercase before casting
 .validator.typeCheck:{[tbl; col; typ]
-  result:@[{[t; v] t$v; 1b}[typ]; tbl col; {[e] 0b}];
+  t:lower typ;
+  result:@[{[t; v] t$v; 1b}[t]; tbl col; {[e] 0b}];
   $[result;
     `valid`message!(1b; "");
     `valid`message!(0b; string[col]," cannot be cast to type ",string typ)]

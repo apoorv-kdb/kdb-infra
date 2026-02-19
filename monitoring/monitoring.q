@@ -1,5 +1,5 @@
 / monitoring.q
-/ Health monitoring - checks ingestion_log for failures and staleness, triggers alerts
+/ Health monitoring - checks ingestion_log for failures and staleness
 / Called at the end of each orchestrator tick
 / Dependencies: ingestion_log.q
 
@@ -16,8 +16,6 @@
 
 .monitoring.setAlertFn:{[fn] `.monitoring.alertFn set fn}
 
-.monitoring.minDiskSpaceGB:50
-
 / ============================================================================
 / CHECKS
 / ============================================================================
@@ -25,7 +23,6 @@
 .monitoring.checkAll:{[]
   .monitoring.checkFailures[];
   .monitoring.checkStaleness[];
-  .monitoring.checkDiskSpace[];
  }
 
 .monitoring.checkFailures:{[]
@@ -50,11 +47,9 @@
 
   stale:{[cutoff; stale; src]
     history:select from .ingestionLog.tbl where source = src, status = `completed;
-    if[0 = count history;
-      :stale , enlist src];
+    if[0 = count history; :stale , enlist src];
     lastComplete:exec max endTime from history;
-    if[lastComplete < cutoff;
-      :stale , enlist src];
+    if[lastComplete < cutoff; :stale , enlist src];
     stale
   }[cutoff]/[(); exec source from dailySources];
 
@@ -64,24 +59,6 @@
   msg,:"  ",", " sv string stale;
 
   .monitoring.alertFn[`WARN; "Stale Sources Detected"; msg];
- }
-
-.monitoring.checkDiskSpace:{[]
-  diskInfo:@[{system "df -BG ",1 _ string .dbWriter.dbPath}; ::; {[e] enlist ""}];
-  if[1 >= count diskInfo; :()];
-
-  parts:" " vs diskInfo 1;
-  parts:parts where count each parts;
-  if[4 > count parts; :()];
-
-  availStr:parts 3;
-  availGB:@["J"$; availStr except "G"; -1];
-  if[availGB < 0; :()];
-
-  if[availGB < .monitoring.minDiskSpaceGB;
-    .monitoring.alertFn[`CRITICAL;
-      "Low Disk Space";
-      "Available: ",availStr,". Threshold: ",string[.monitoring.minDiskSpaceGB],"G"]];
  }
 
 / ============================================================================

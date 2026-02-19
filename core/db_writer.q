@@ -50,8 +50,8 @@
 
   enumData:@[{[db; d] .Q.en[db; d]}[.dbWriter.dbPath]; tbl; {[e] '"Enum failed: ",e}];
 
-  partPath:` sv .dbWriter.dbPath , (`$string dt) , tblName , `;
-  @[{[pp; d] pp set d}; (partPath; enumData); {[e] '"Write failed: ",e}];
+  partPath:` sv (.dbWriter.dbPath; `$string dt; tblName; `);
+  .[{[pp; d] pp set d}; (partPath; enumData); {[e] '"Write failed: ",e}];
 
   show "  Saved ",string[tblName]," for ",string[dt],": ",string[count tbl]," rows";
   count tbl
@@ -67,8 +67,8 @@
 
   enumData:@[{[db; d] .Q.en[db; d]}[.dbWriter.dbPath]; tbl; {[e] '"Enum failed: ",e}];
 
-  tblPath:` sv .dbWriter.dbPath , tblName;
-  @[{[p; d] p set d}; (tblPath; enumData); {[e] '"Write failed: ",e}];
+  tblPath:` sv (.dbWriter.dbPath; tblName);
+  .[{[p; d] p set d}; (tblPath; enumData); {[e] '"Write failed: ",e}];
  }
 
 / ============================================================================
@@ -85,7 +85,7 @@
  }
 
 .dbWriter.listTables:{[dt]
-  partPath:` sv .dbWriter.dbPath , `$string dt;
+  partPath:` sv (.dbWriter.dbPath; `$string dt);
   tbls:key partPath;
   tbls where not tbls in `sym`.d
  }
