@@ -205,26 +205,22 @@
 
   refreshFn:.orchestrator.appRegistry appName;
 
-  / Mark all sources as processing
   {[dt; src; fp]
     .ingestionLog.markProcessing[src; dt; fp];
   }[dt]'[key sourceMap; value sourceMap];
 
-  / Call refresh - use . (dot apply) for multi-arg functions
   result:.[refreshFn; (dt; sourceMap); {[e] "REFRESH_ERROR:",e}];
 
-  / Any string result is an error
   if[10h = abs type result;
     show "  [ERROR] ",string[appName]," failed for ",string[dt],": ",result;
-    {[dt; src] .ingestionLog.markFailed[src; dt; result]}[dt] each key sourceMap;
+    {[dt; result; src] .ingestionLog.markFailed[src; dt; result]}[dt; result] each key sourceMap;
     :()];
 
-  / Success - get record count from DB partition
-  totalRows:@[{[dt; srcs]
-    sum {[dt; src]
-      tblPath:` sv (.dbWriter.dbPath; `$string dt; src);
-      $[() ~ key tblPath; 0; count get tblPath]
-    }[dt] each srcs}; (dt; key sourceMap); {[e] 0}];
+  totalRows:{[dt; src]
+    tblPath:` sv (.dbWriter.dbPath; `$string dt; src);
+    $[() ~ @[key; tblPath; {[e] ()}]; 0j; `long$count get tblPath]
+  }[dt] each key sourceMap;
+  totalRows:sum totalRows;
 
   {[dt; recCount; src]
     .ingestionLog.markCompleted[src; dt; recCount];
@@ -233,7 +229,7 @@
   show "  [OK] ",string[appName]," completed for ",string[dt],
     " (",string[totalRows]," total rows)";
  }
-
+      
 / ============================================================================
 / TIMER CONTROL
 / ============================================================================

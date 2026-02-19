@@ -39,9 +39,7 @@
  ];
 
 / ============================================================================
-/ RETENTION + REGISTER
+/ REGISTER
 / ============================================================================
-
-.retention.classifyBatch[`sales_transactions`sales_by_region!`detailed`aggregated];
 
 .orchestrator.registerApp[`sales_core; .salesCore.refresh];

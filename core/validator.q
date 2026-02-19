@@ -23,7 +23,10 @@
 / ============================================================================
 
 .validator.notNull:{[tbl; col]
-  nullCount:sum null tbl col;
+  vals:tbl col;
+  nullCount:$[11h = abs type vals;
+    sum vals = `;
+    sum null vals];
   $[0 = nullCount;
     `valid`message!(1b; "");
     `valid`message!(0b; string[col]," has ",string[nullCount]," nulls")]

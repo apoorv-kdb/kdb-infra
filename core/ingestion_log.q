@@ -68,12 +68,13 @@
  }
 
 .ingestionLog.markCompleted:{[src; dt; recCount]
-  update status:`completed, recordCount:recCount, endTime:.z.p
+  update status:`completed, recordCount:`long$recCount, endTime:.z.p
     from `.ingestionLog.tbl where source = src, date = dt;
  }
 
 .ingestionLog.markFailed:{[src; dt; errMsg]
-  update status:`failed, errorMsg:errMsg, endTime:.z.p
+  msg:$[10h = abs type errMsg; errMsg; "unknown error"];
+  update status:`failed, errorMsg:enlist msg, endTime:.z.p
     from `.ingestionLog.tbl where source = src, date = dt;
  }
 

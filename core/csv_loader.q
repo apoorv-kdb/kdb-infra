@@ -13,7 +13,9 @@
     typ:typeMap col;
     $[typ = "*";
       tbl col;
-      @[{[t; v] t$v}[lower typ]; tbl col;
+      typ in "Ss";
+        `$tbl col;
+      @[{[t; v] (t$)v}[typ]; tbl col;
         {[col; e] '"Cast failed: ",string[col],": ",e}[col]]]
   }[typeMap; tbl] each castCols;
   flip castCols!castVals
@@ -48,9 +50,9 @@
   raw:keepCols#raw;
 
   / Cast first, then validate on typed data
-  types:schema`types;
-  typeMap:expectedCols!types;
-  typeMap:keepCols#typeMap;
+ types:schema`types;
+ typeMap:expectedCols!{x} each (count expectedCols)#types;
+ typeMap:keepCols#typeMap;
   tbl:.csv.typeCast[raw; typeMap];
 
   validation:.validator.validateSchema[tbl; schema];
