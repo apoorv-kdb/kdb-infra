@@ -2,11 +2,7 @@
 / Entry point for domain server processes (NOT the orchestrator)
 / Loads: validator, db_writer, lib, cache
 / Also loads all app config.q files for a given domain so schemas are available
-/
-/ Usage:
-/   q apps/sales/server.q -p 5001 -dbPath /data/databases/prod
-/
-/ Each domain's server.q starts with: \l server/server_init.q
+/ Usage: q apps/sales/server.q -p 5001 -dbPath /data/databases/prod
 
 / ============================================================================
 / ROOT DIRECTORY
@@ -20,8 +16,7 @@ ROOT:first system "pwd"
 
 opts:.Q.opt .z.x;
 
-argDbPath:$[`dbPath in key opts; hsym `$first opts`dbPath; hsym `$ROOT,"/curated_db"];
-argDomain:$[`domain in key opts; `$first opts`domain; `];
+argDbPath:$[`dbPath in key opts; hsym `$first opts`dbPath; `:/data/databases/prod_parallel];
 
 / ============================================================================
 / LOAD MODULES
@@ -63,18 +58,22 @@ if[not `retention in key `.;
   .retention.setDailyRetention:{[x]};
   .retention.setMonthlyRetention:{[x]}];
 
+if[not `ingestionLog in key `.;
+  .ingestionLog.init:{[]}];
+
 / ============================================================================
 / LOAD DOMAIN APP CONFIGS (for schemas + domain registration)
 / ============================================================================
 
-loadDomainConfigs:{[domain]
-  domainPath:ROOT,"/apps/",string domain;
+loadDomainConfigs:{[dom]
+  domainPath:ROOT,"/apps/",string dom;
   if[() ~ @[key; hsym `$domainPath; {[e] ()}];
     show "Domain path not found: ",domainPath;
     :()];
 
   entries:key hsym `$domainPath;
-  entries:entries where not entries in `` `.gitkeep`server.q;
+  entries:entries where not null entries;
+  entries:entries where not entries in `.gitkeep`server.q;
 
   {[domainPath; entry]
     configFile:domainPath,"/",string[entry],"/config.q";

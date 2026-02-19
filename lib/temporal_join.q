@@ -2,8 +2,6 @@
 / As-of and window joins for temporal data
 / Stateless: table in, table out
 
-\d .temporal
-
 / As-of join: for each row in left, get most recent match from right
 / Args:
 /   left: table - must have dateCol
@@ -12,7 +10,7 @@
 /   keyCols: symbol list - exact match columns (can be empty `$())
 /   valueCols: symbol list - columns to bring from right
 / Returns: left table enriched with valueCols from right
-asof:{[left; right; dateCol; keyCols; valueCols]
+.temporal.asof:{[left; right; dateCol; keyCols; valueCols]
   if[0h = type keyCols; keyCols:`$()];
   rightSorted:`date xasc right;
   leftSorted:`date xasc left;
@@ -35,7 +33,7 @@ asof:{[left; right; dateCol; keyCols; valueCols]
 /   aggFn: function - aggregation (sum, avg, count, etc.)
 /   outCol: symbol - output column name
 / Returns: left table with outCol added
-windowJoin:{[left; right; dateCol; keyCols; window; valueCol; aggFn; outCol]
+.temporal.windowJoin:{[left; right; dateCol; keyCols; window; valueCol; aggFn; outCol]
   / For each left row, find matching right rows within window
   result:{[right; dateCol; keyCols; window; valueCol; aggFn; leftRow]
     dt:leftRow dateCol;
@@ -59,8 +57,6 @@ windowJoin:{[left; right; dateCol; keyCols; window; valueCol; aggFn; outCol]
 
 / Point-in-time join: get the exact value at each date (no forward-looking)
 / Same as asof but enforces strict <= (not <)
-pit:{[left; right; dateCol; keyCols; valueCols]
-  asof[left; right; dateCol; keyCols; valueCols]
+.temporal.pit:{[left; right; dateCol; keyCols; valueCols]
+  .temporal.asof[left; right; dateCol; keyCols; valueCols]
  }
-
-\d .

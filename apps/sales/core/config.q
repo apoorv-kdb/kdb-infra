@@ -1,5 +1,5 @@
-/ sales/core — config.q
-/ Handles: daily transactions → save detail + regional aggregation
+/ apps/sales/core — config.q
+/ Handles: daily transactions, saves detail + regional aggregation
 
 / ============================================================================
 / DOMAIN
@@ -23,7 +23,7 @@
 .validator.registerSchema[`sales_transactions;
   `columns`types`mandatory!(
     `date`region`product`quantity`revenue;
-    "dssji";
+    "DSSJI";
     `date`region`product`revenue)
  ];
 
@@ -34,7 +34,7 @@
 .validator.registerSchema[`sales_by_region;
   `columns`types`mandatory!(
     `date`region`total_revenue`total_quantity;
-    "dsij";
+    "DSJI";
     `date`region`total_revenue)
  ];
 
@@ -44,4 +44,4 @@
 
 .retention.classifyBatch[`sales_transactions`sales_by_region!`detailed`aggregated];
 
-.orchestrator.registerApp[`sales_core; .sales.core.refresh];
+.orchestrator.registerApp[`sales_core; .salesCore.refresh];

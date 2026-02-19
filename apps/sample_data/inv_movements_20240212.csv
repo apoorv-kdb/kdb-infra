@@ -1,8 +1,0 @@
-date,warehouse,sku,direction,units,reason
-2024.02.12,WH-NYC,SKU001,IN,100,purchase_order
-2024.02.12,WH-NYC,SKU001,OUT,30,customer_order
-2024.02.12,WH-NYC,SKU002,OUT,15,customer_order
-2024.02.12,WH-LON,SKU001,IN,50,transfer
-2024.02.12,WH-LON,SKU004,OUT,20,customer_order
-2024.02.12,WH-TKY,SKU003,IN,25,purchase_order
-2024.02.12,WH-TKY,SKU001,OUT,40,customer_order

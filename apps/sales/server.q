@@ -1,5 +1,5 @@
-/ sales domain — server.q
-/ Single server for the sales domain, serving data from all sales apps
+/ apps/sales/server.q
+/ Sales domain server — serves data from the sales/core app
 / Start with: q apps/sales/server.q -p 5001 -dbPath /data/databases/prod
 
 \l server/server_init.q
@@ -11,16 +11,15 @@ loadDomainConfigs[`sales];
 / CACHE RECIPES
 / ============================================================================
 
-/ From core app: transactions detail + regional agg
+/ Transactions detail (90-day window)
 .cache.register[`txns;       `sales_transactions; 90;  ::];
+
+/ Regional aggregation (1-year window)
 .cache.register[`by_region;  `sales_by_region;    365; ::];
 
-/ From core app: regional trend with rolling 30-day avg
+/ Regional trend with rolling 30-day avg
 .cache.register[`region_trend; `sales_by_region; 365;
   {[d] .rolling.addRolling[d; `total_revenue; 30; `avg; `revenue_30d_avg]}];
-
-/ From returns app: net revenue by region
-.cache.register[`net_by_region; `sales_net_by_region; 365; ::];
 
 .cache.loadAll[]
 .cache.startRefresh[600000]
@@ -35,17 +34,12 @@ getByRegion:{[dt]
  }
 
 / Regional trend with rolling avg
-getRegionTrend:{[region; startDt; endDt]
+getRegionTrend:{[rgn; startDt; endDt]
   select from .cache.get[`region_trend]
-    where region = region, date within (startDt; endDt)
- }
-
-/ Net revenue (after returns) by region
-getNetByRegion:{[dt]
-  select from .cache.get[`net_by_region] where date = dt
+    where region = rgn, date within (startDt; endDt)
  }
 
 / Drill down to transaction detail
-drillDown:{[dt; region]
-  select from .cache.get[`txns] where date = dt, region = region
+drillDown:{[dt; rgn]
+  select from .cache.get[`txns] where date = dt, region = rgn
  }

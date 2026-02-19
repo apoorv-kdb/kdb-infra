@@ -1,19 +1,10 @@
 / init.q
 / Entry point for the orchestrator process
 / For domain query servers, use server/server_init.q instead
-/
 / Usage:
-/   Prod:          q init.q -p 9000 -dbPath /data/databases/prod -archivePath /data/archive
-/   Prod parallel: q init.q -p 8000 -dbPath /data/databases/prod_parallel -archivePath /data/archive
-/                           -dailyRetention 90 -monthlyRetention 90
-/
-/ Command line args:
-/   -p              port (standard q flag)
-/   -dbPath         path to partitioned database (default: {ROOT}/curated_db)
-/   -archivePath    path to CSV archive directory (default: {ROOT}/archive)
-/   -timerInterval  orchestrator interval in ms (default: 3600000 = 1 hour)
-/   -dailyRetention days to keep daily partitions (default: 365)
-/   -monthlyRetention days to keep monthly snapshots (default: 730)
+/   Prod:          q init.q -p 9000 -dbPath /data/databases/prod
+/   Prod parallel: q init.q -p 8000
+/   Custom:        q init.q -p 8000 -dbPath /data/databases/custom -dailyRetention 30
 
 / ============================================================================
 / ROOT DIRECTORY
@@ -27,11 +18,11 @@ ROOT:first system "pwd"
 
 opts:.Q.opt .z.x;
 
-argDbPath:$[`dbPath in key opts; hsym `$first opts`dbPath; hsym `$ROOT,"/curated_db"];
-argArchivePath:$[`archivePath in key opts; hsym `$first opts`archivePath; hsym `$ROOT,"/archive"];
+argDbPath:$[`dbPath in key opts; hsym `$first opts`dbPath; `:/data/databases/prod_parallel];
+argArchivePath:$[`archivePath in key opts; hsym `$first opts`archivePath; `:/data/archive];
 argTimerInterval:$[`timerInterval in key opts; "J"$first opts`timerInterval; 3600000];
-argDailyRetention:$[`dailyRetention in key opts; "J"$first opts`dailyRetention; 365];
-argMonthlyRetention:$[`monthlyRetention in key opts; "J"$first opts`monthlyRetention; 730];
+argDailyRetention:$[`dailyRetention in key opts; "J"$first opts`dailyRetention; 90];
+argMonthlyRetention:$[`monthlyRetention in key opts; "J"$first opts`monthlyRetention; 90];
 
 / ============================================================================
 / LOAD MODULES IN DEPENDENCY ORDER
@@ -74,18 +65,18 @@ show "";
 show "Loading apps...";
 appRoot:hsym `$ROOT,"/apps";
 domains:key appRoot;
-domains:domains where not domains in `` `.gitkeep;
+domains:domains where not null domains;
+domains:domains where not domains in `.gitkeep;
 
-{[domain]
-  domainPath:ROOT,"/apps/",string domain;
+{[dom]
+  domainPath:ROOT,"/apps/",string dom;
   entries:key hsym `$domainPath;
-  entries:entries where not entries in `` `.gitkeep;
+  entries:entries where not null entries;
+  entries:entries where not entries in `.gitkeep;
 
-  / Load each subdirectory that has a config.q (these are apps)
   {[domainPath; entry]
     entryPath:domainPath,"/",string entry;
 
-    / Skip files (like server.q) — only process directories
     configFile:entryPath,"/config.q";
     refreshFile:entryPath,"/data_refresh.q";
 
@@ -126,6 +117,7 @@ domains:domains where not domains in `` `.gitkeep;
 show "";
 show "========================================";
 show "Infrastructure loaded successfully";
+show "========================================";
 show "ROOT:              ",ROOT;
 show "Database path:     ",string argDbPath;
 show "Archive path:      ",string argArchivePath;
@@ -137,4 +129,4 @@ show "========================================";
 show "";
 show "Next steps:";
 show "  Start orchestrator:  .orchestrator.start[]";
-show "  Or run manually:     .orchestrator.run[]";
+show "  Or run once:         .orchestrator.orchestratorRun[]";

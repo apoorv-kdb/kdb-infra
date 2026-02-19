@@ -1,9 +1,0 @@
-date,warehouse,category,subcategory,sku,units,value
-2024.02.12,WH-NYC,Electronics,Phones,SKU001,500,250000
-2024.02.12,WH-NYC,Electronics,Laptops,SKU002,200,400000
-2024.02.12,WH-NYC,Furniture,Desks,SKU003,50,25000
-2024.02.12,WH-LON,Electronics,Phones,SKU001,300,150000
-2024.02.12,WH-LON,Electronics,Tablets,SKU004,150,75000
-2024.02.12,WH-LON,Furniture,Chairs,SKU005,400,80000
-2024.02.12,WH-TKY,Electronics,Phones,SKU001,250,125000
-2024.02.12,WH-TKY,Furniture,Desks,SKU003,100,50000

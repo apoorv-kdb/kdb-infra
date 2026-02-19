@@ -2,11 +2,14 @@
 / Flatten hierarchical data from wide level columns to parent-child format
 / Stateless: table in, table out
 
-\d .hierarchy
-
 / ============================================================================
 / FLATTEN
 / ============================================================================
+
+/ Build ID by concatenating level values with | separator
+.hierarchy.buildId:{[data; idCols]
+  {`$"|" sv string x}each flip data idCols
+ }
 
 / Flatten wide hierarchy into parent-child format
 / Args:
@@ -15,17 +18,17 @@
 /   metricCols: symbol list of metric columns to aggregate
 /   dateCols: symbol list of key columns beyond hierarchy (default: enlist `date)
 / Returns: table with (dateCols, `h_name`h_id`h_pid`h_depth, metricCols)
-flatten:{[data; levelCols; metricCols; dateCols]
+.hierarchy.flatten:{[data; levelCols; metricCols; dateCols]
   if[(::) ~ dateCols; dateCols:enlist `date];
   nLevels:count levelCols;
 
   result:raze {[data; levelCols; metricCols; dateCols; depth]
     lvl:levelCols depth;
     idCols:(depth + 1)#levelCols;
-    ids:buildId[data; idCols];
+    ids:.hierarchy.buildId[data; idCols];
     pids:$[depth = 0;
       count[data]#enlist `;
-      buildId[data; depth#levelCols]];
+      .hierarchy.buildId[data; depth#levelCols]];
     names:data lvl;
 
     / Aggregate metrics at this level
@@ -33,10 +36,10 @@ flatten:{[data; levelCols; metricCols; dateCols]
     agg:?[data; (); {x!x} groupCols; {x!((sum;) each x)} metricCols];
 
     / Build id/pid for aggregated rows
-    aggIds:buildId[agg; idCols];
+    aggIds:.hierarchy.buildId[agg; idCols];
     aggPids:$[depth = 0;
       count[agg]#enlist `;
-      buildId[agg; depth#levelCols]];
+      .hierarchy.buildId[agg; depth#levelCols]];
     aggNames:agg lvl;
 
     / Construct output
@@ -48,55 +51,48 @@ flatten:{[data; levelCols; metricCols; dateCols]
   result
  }
 
-/ Build ID by concatenating level values with | separator
-buildId:{[data; idCols]
-  {`$"|" sv string x}each flip data idCols
- }
-
 / ============================================================================
 / NAVIGATION
 / ============================================================================
 
-children:{[data; parentId]
+.hierarchy.children:{[data; parentId]
   select from data where h_pid = parentId
  }
 
-descendants:{[data; parentId]
-  direct:children[data; parentId];
+.hierarchy.descendants:{[data; parentId]
+  direct:.hierarchy.children[data; parentId];
   if[0 = count direct; :direct];
-  direct , raze {[data; row] descendants[data; row`h_id]} [data] each 0!direct
+  direct , raze {[data; row] .hierarchy.descendants[data; row`h_id]} [data] each 0!direct
  }
 
-path:{[data; id]
+.hierarchy.path:{[data; id]
   node:select from data where h_id = id;
   if[0 = count node; :node];
   pid:first node`h_pid;
   if[` ~ pid; :node];
-  path[data; pid] , node
+  .hierarchy.path[data; pid] , node
  }
 
-roots:{[data] select from data where h_pid = `}
+.hierarchy.roots:{[data] select from data where h_pid = `}
 
-leaves:{[data]
+.hierarchy.leaves:{[data]
   parentIds:distinct data`h_pid;
   select from data where not h_id in parentIds
  }
 
-atDepth:{[data; depth] select from data where h_depth = depth}
+.hierarchy.atDepth:{[data; depth] select from data where h_depth = depth}
 
 / ============================================================================
 / CUSTOM GROUPING
 / ============================================================================
 
-addCustomGroup:{[data; mapping]
+.hierarchy.addCustomGroup:{[data; mapping]
   / mapping: table with h_id and h_custom columns
   data lj `h_id xkey mapping
  }
 
-aggregateByCustom:{[data; metricCols; dateCols]
+.hierarchy.aggregateByCustom:{[data; metricCols; dateCols]
   if[(::) ~ dateCols; dateCols:enlist `date];
   groupCols:dateCols , enlist `h_custom;
   ?[data; (); {x!x} groupCols; {x!((sum;) each x)} metricCols]
  }
-
-\d .

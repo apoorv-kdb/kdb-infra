@@ -4,14 +4,12 @@
 /
 / Dependencies: csv_loader.q, ingestion_log.q, db_writer.q, monitoring.q
 
-\d .orchestrator
-
 / ============================================================================
 / CONFIGURATION
 / ============================================================================
 
 / Source configuration table — populated by app config.q via addSources
-source_config:([]
+.orchestrator.source_config:([]
   source:`symbol$();
   app:`symbol$();
   required:`boolean$();
@@ -22,25 +20,26 @@ source_config:([]
  );
 
 / App registry: app name -> refresh function
-appRegistry:()!()
+.orchestrator.appRegistry:()!()
 
 / Archive path for processed CSVs
-archivePath:`:/data/archive
+.orchestrator.archivePath:`:/data/archive
 
 / Timer interval in ms (default 1 hour)
-timerInterval:3600000
+.orchestrator.timerInterval:3600000
 
 / Run state
-isRunning:0b
-runCount:0
+.orchestrator.isRunning:0b
+.orchestrator.runCount:0
 
 / ============================================================================
 / SOURCE REGISTRATION (called by app config.q)
 / ============================================================================
 
 / Register source entries at runtime
-/ Args: sourceList - list of dicts or table rows matching source_config schema
-addSources:{[sourceList]
+/ Args: sourceList - dict (single source) or table (multiple sources)
+.orchestrator.addSources:{[sourceList]
+  if[99h = type sourceList; sourceList:enlist sourceList];
   `.orchestrator.source_config upsert sourceList;
  }
 
@@ -49,12 +48,11 @@ addSources:{[sourceList]
 / ============================================================================
 
 / Register an app's data refresh function
-/ Called by each app's config.q: .orchestrator.registerApp[`myapp; .myapp.refresh]
 / Args:
-/   app: symbol - app name (must match app column in source_config)
+/   appName: symbol - app name (must match app column in source_config)
 /   refreshFn: function - signature: {[date; availableSources] ...}
-registerApp:{[app; refreshFn]
-  .orchestrator.appRegistry[app]:refreshFn;
+.orchestrator.registerApp:{[appName; refreshFn]
+  .orchestrator.appRegistry[appName]:refreshFn;
  }
 
 / ============================================================================
@@ -63,10 +61,11 @@ registerApp:{[app; refreshFn]
 
 / Scan all source directories for files matching patterns
 / Returns: table of (source; date; filepath)
-scanAllSources:{[]
+.orchestrator.scanAllSources:{[]
   results:([] source:`symbol$(); date:`date$(); filepath:`symbol$());
 
-  {[results; row]
+  {[results; idx]
+    row:.orchestrator.source_config idx;
     dir:row`directory;
     pattern:row`filePattern;
     src:row`source;
@@ -78,34 +77,41 @@ scanAllSources:{[]
     if[0 = count matched; :results];
 
     {[results; src; dir; fn]
-      dt:extractDate[fn];
+      dt:.orchestrator.extractDate[fn];
       if[not null dt;
         fp:` sv dir , fn;
-        `results insert (src; dt; fp)];
+        :results , ([] source:enlist src; date:enlist dt; filepath:enlist fp)];
       results
     }[; src; dir]/[results; matched]
-  }/[results; 0!source_config]
+  }/[results; til count .orchestrator.source_config]
  }
 
 / Extract date from filename
-/ Supports: YYYYMMDD, YYYY-MM-DD, YYYY_MM_DD, YYYY.MM.DD
-extractDate:{[filename]
+/ Supports: YYYY-MM-DD, YYYY_MM_DD, YYYY.MM.DD, YYYYMMDD
+.orchestrator.extractDate:{[filename]
   fn:string filename;
+  n:count fn;
+
+  / Try YYYY-MM-DD, YYYY_MM_DD, YYYY.MM.DD anywhere in filename
+  i:0;
+  while[i <= n - 10;
+    if[all fn[i + 0 1 2 3] in "0123456789";
+      if[fn[i+4] in "-_.";
+        if[all fn[i + 5 6] in "0123456789";
+          if[fn[i+7] = fn[i+4];
+            if[all fn[i + 8 9] in "0123456789";
+              dt:@["D"$; fn i + til 10; 0Nd];
+              if[not null dt; :dt]]]]]];
+    i+:1];
 
   / Try YYYYMMDD (8 consecutive digits)
-  digits:fn where fn in "0123456789";
-  if[8 <= count digits;
-    candidate:8#digits;
-    dt:@["D"$; candidate[0 1 2 3],".",candidate[4 5],".",candidate[6 7]; 0Nd];
-    if[not null dt; :dt]];
-
-  / Try YYYY-MM-DD or YYYY_MM_DD or YYYY.MM.DD
-  seps:where fn in "-_.";
-  if[2 > count seps; :0Nd];
-  if[(4 = first seps) & (7 = seps 1);
-    candidate:fn[0 1 2 3],".",fn[5 6],".",fn[8 9];
-    dt:@["D"$; candidate; 0Nd];
-    if[not null dt; :dt]];
+  i:0;
+  while[i <= n - 8;
+    if[all fn[i + til 8] in "0123456789";
+      c:fn i + til 8;
+      dt:@["D"$; c[0 1 2 3],"-",c[4 5],"-",c[6 7]; 0Nd];
+      if[not null dt; :dt]];
+    i+:1];
 
   0Nd
  }
@@ -115,20 +121,20 @@ extractDate:{[filename]
 / ============================================================================
 
 / Filter scanned files to only new or previously-failed work
-identifyWork:{[scanned]
+.orchestrator.identifyWork:{[scanned]
   select from scanned where not .ingestionLog.isProcessed'[source; date]
  }
 
 / Group new work by app and date
-groupByApp:{[work]
-  work:work lj `source xkey select source, app, required from source_config;
+.orchestrator.groupByApp:{[work]
+  work:work lj `source xkey select source, app, required from .orchestrator.source_config;
   select sources:source, filepaths:filepath, requiredSources:source where required
     by app, date from work
  }
 
 / Check if all required sources for an app/date are available
-dependenciesMet:{[app; dt; currentSources]
-  requiredAll:exec source from source_config where app=app, required;
+.orchestrator.dependenciesMet:{[appName; dt; currentSources]
+  requiredAll:exec source from .orchestrator.source_config where app = appName, required;
   previouslyDone:.ingestionLog.completedSources[dt];
   available:distinct currentSources , previouslyDone;
   all requiredAll in available
@@ -138,46 +144,43 @@ dependenciesMet:{[app; dt; currentSources]
 / MAIN ORCHESTRATION LOOP
 / ============================================================================
 
-run:{[]
-  if[isRunning; :()];
+.orchestrator.orchestratorRun:{[]
+  if[.orchestrator.isRunning; :()];
   `.orchestrator.isRunning set 1b;
-  `.orchestrator.runCount set runCount + 1;
+  `.orchestrator.runCount set .orchestrator.runCount + 1;
 
   tickStart:.z.p;
 
   / Phase 1: Scan for files
-  scanned:@[scanAllSources; ::;
-    {[e] show "Scan error: ",e; 0#([] source:`$(); date:`date$(); filepath:`$())}];
+  scanned:@[.orchestrator.scanAllSources; ::;
+    {[e] show "Scan error: ",e; ([] source:`symbol$(); date:`date$(); filepath:`symbol$())}];
 
   / Phase 2: Identify new work
-  work:identifyWork scanned;
+  work:.orchestrator.identifyWork scanned;
 
   if[0 < count work;
     / Phase 3: Group by app and date
-    grouped:groupByApp work;
+    grouped:.orchestrator.groupByApp work;
 
     / Phase 4+5: Check dependencies and dispatch
-    {[row]
-      app:row`app;
+    {[grouped; idx]
+      row:(0!grouped) idx;
+      appName:row`app;
       dt:row`date;
       srcs:row`sources;
       fps:row`filepaths;
 
-      / Check dependencies
-      if[dependenciesMet[app; dt; srcs];
-        / Build source -> filepath dict for the app
+      if[.orchestrator.dependenciesMet[appName; dt; srcs];
         sourceMap:srcs!fps;
-
-        / Dispatch to app's refresh function
-        dispatchApp[app; dt; sourceMap]];
-    } each 0!grouped;
+        .orchestrator.dispatchApp[appName; dt; sourceMap]];
+    }[grouped] each til count grouped;
   ];
 
   / Phase 6: Persist ingestion log
   .ingestionLog.persist[];
 
   / Phase 7: Archive processed CSVs
-  archiveCompleted[tickStart];
+  .orchestrator.archiveCompleted[tickStart];
 
   / Phase 8: Monitoring
   @[.monitoring.checkAll; ::; {[e] show "Monitoring error: ",e}];
@@ -190,33 +193,32 @@ run:{[]
 / ============================================================================
 
 / Call an app's registered refresh function
-dispatchApp:{[app; dt; sourceMap]
-  if[not app in key appRegistry;
-    show "No refresh function registered for app: ",string app;
+.orchestrator.dispatchApp:{[appName; dt; sourceMap]
+  if[not appName in key .orchestrator.appRegistry;
+    show "No refresh function registered for app: ",string appName;
     :()];
 
-  refreshFn:appRegistry app;
+  refreshFn:.orchestrator.appRegistry appName;
 
   / Mark all sources as processing
-  {[src; dt; fp]
+  {[dt; src; fp]
     .ingestionLog.markProcessing[src; dt; fp];
-  }[; dt;]'[key sourceMap; value sourceMap];
+  }[dt]'[key sourceMap; value sourceMap];
 
   / Call the app's refresh function
   result:@[refreshFn; (dt; sourceMap);
     {[e] show "App refresh failed: ",e; `error}];
 
   if[`error ~ result;
-    / Mark sources as failed
-    {[src; dt]
+    {[dt; src]
       .ingestionLog.markFailed[src; dt; "App refresh failed"];
-    }[; dt] each key sourceMap;
+    }[dt] each key sourceMap;
     :()];
 
   / Mark sources as completed
-  {[src; dt]
+  {[dt; src]
     .ingestionLog.markCompleted[src; dt; 0];
-  }[; dt] each key sourceMap;
+  }[dt] each key sourceMap;
  }
 
 / ============================================================================
@@ -224,12 +226,13 @@ dispatchApp:{[app; dt; sourceMap]
 / ============================================================================
 
 / Archive CSV files that were successfully processed during this tick
-archiveCompleted:{[tickStart]
+.orchestrator.archiveCompleted:{[tickStart]
   completed:@[.ingestionLog.completedSince; tickStart;
     {[e] ([] filepath:`symbol$(); date:`date$())}];
   if[0 = count completed; :()];
 
-  {[row]
+  {[completed; idx]
+    row:completed idx;
     fp:row`filepath;
     dt:row`date;
 
@@ -245,30 +248,30 @@ archiveCompleted:{[tickStart]
 
     @[{[src; dest] system "mv ",src," ",dest}; (1 _ string fp; 1 _ string destFile);
       {[e] show "Archive failed: ",e}];
-  } each 0!completed;
+  }[completed] each til count completed;
  }
 
 / ============================================================================
 / TIMER CONTROL
 / ============================================================================
 
-start:{[]
-  .z.ts:{.orchestrator.run[]};
-  system "t ",string timerInterval;
-  show "Orchestrator started. Interval: ",string[timerInterval],"ms";
+.orchestrator.start:{[]
+  .z.ts:{.orchestrator.orchestratorRun[]};
+  system "t ",string .orchestrator.timerInterval;
+  show "Orchestrator started. Interval: ",string[.orchestrator.timerInterval],"ms";
  }
 
-stop:{[]
+.orchestrator.stop:{[]
   system "t 0";
   show "Orchestrator stopped.";
  }
 
-setInterval:{[ms]
+.orchestrator.setInterval:{[ms]
   `.orchestrator.timerInterval set ms;
   if[0 < system "t"; system "t ",string ms];
  }
 
-setArchivePath:{[path]
+.orchestrator.setArchivePath:{[path]
   `.orchestrator.archivePath set path;
  }
 
@@ -276,29 +279,33 @@ setArchivePath:{[path]
 / MANUAL OPERATIONS
 / ============================================================================
 
-manualRefresh:{[app; dt]
-  allSources:exec source from source_config where app=app;
+.orchestrator.manualRefresh:{[appName; dt]
+  allSources:exec source from .orchestrator.source_config where app = appName;
   fps:{[src; dt]
-    dir:first exec directory from source_config where source=src;
-    files:key dir;
-    matched:files where files like first exec filePattern from source_config where source=src;
-    dateMatched:matched where dt = extractDate each matched;
+    dir:first exec directory from .orchestrator.source_config where source = src;
+    pat:first exec filePattern from .orchestrator.source_config where source = src;
+    files:@[key; dir; {[e] `symbol$()}];
+    matched:files where files like pat;
+    dateMatched:matched where dt = .orchestrator.extractDate each matched;
     if[0 = count dateMatched; :()];
     ` sv dir , first dateMatched
   }[; dt] each allSources;
   sourceMap:allSources!fps;
   sourceMap:sourceMap where not (::) ~/: value sourceMap;
-  dispatchApp[app; dt; sourceMap];
+  .orchestrator.dispatchApp[appName; dt; sourceMap];
  }
 
-backfill:{[app; startDate; endDate]
+.orchestrator.backfill:{[appName; startDate; endDate]
   dates:startDate + til 1 + endDate - startDate;
-  {[app; dt] manualRefresh[app; dt]}[app] each dates;
+  {[appName; dt] .orchestrator.manualRefresh[appName; dt]}[appName] each dates;
  }
 
-status:{[]
+.orchestrator.status:{[]
   `isRunning`runCount`timerInterval`registeredApps`registeredSources`archivePath!(
-    isRunning; runCount; timerInterval; key appRegistry; count source_config; archivePath)
+    .orchestrator.isRunning;
+    .orchestrator.runCount;
+    .orchestrator.timerInterval;
+    key .orchestrator.appRegistry;
+    count .orchestrator.source_config;
+    .orchestrator.archivePath)
  }
-
-\d .

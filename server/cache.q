@@ -2,60 +2,57 @@
 / Server-side cache management
 / Loads tables from the partitioned DB, optionally transforms them,
 / holds in memory, and refreshes on a timer
-/
 / Dependencies: db_writer.q (for dbPath and reload)
-
-\d .cache
 
 / ============================================================================
 / STATE
 / ============================================================================
 
-data:()!()
-recipes:()!()
-refreshMs:600000
-lastRefresh:0Np
+.cache.cacheData:()!()
+.cache.recipes:()!()
+.cache.refreshMs:600000
+.cache.lastRefresh:0Np
 
 / ============================================================================
 / REGISTRATION
 / ============================================================================
 
-register:{[name; table; horizonDays; transformFn]
-  .cache.recipes[name]:`table`horizonDays`transformFn!(table; horizonDays; transformFn);
+.cache.register:{[nm; tblName; horizonDays; transformFn]
+  .cache.recipes[nm]:`tblName`horizonDays`transformFn!(tblName; horizonDays; transformFn);
  }
 
-remove:{[name]
-  .cache.recipes _: name;
-  .cache.data _: name;
+.cache.remove:{[nm]
+  .cache.recipes _: nm;
+  .cache.cacheData _: nm;
  }
 
 / ============================================================================
 / LOADING
 / ============================================================================
 
-loadOne:{[name]
-  if[not name in key recipes; '"Unknown cache entry: ",string name];
+.cache.loadOne:{[nm]
+  if[not nm in key .cache.recipes; '"Unknown cache entry: ",string nm];
 
-  recipe:recipes name;
-  tbl:recipe`table;
+  recipe:.cache.recipes nm;
+  tblName:recipe`tblName;
   horizon:recipe`horizonDays;
   fn:recipe`transformFn;
 
   cutoff:.z.d - horizon;
 
-  raw:@[{[t; c] select from t where date >= c}; (tbl; cutoff);
+  raw:@[{[t; c] select from t where date >= c}; (tblName; cutoff);
     {[e] show "Cache load failed: ",e; 0#([])}];
 
   result:$[(::) ~ fn; raw; @[fn; raw; {[e] show "Cache transform failed: ",e; raw}]];
 
-  .cache.data[name]:result;
-  show "  Cached ",string[name],": ",string[count result]," rows";
+  .cache.cacheData[nm]:result;
+  show "  Cached ",string[nm],": ",string[count result]," rows";
  }
 
-loadAll:{[]
+.cache.loadAll:{[]
   show "Loading cache...";
   .dbWriter.reload[];
-  loadOne each key recipes;
+  .cache.loadOne each key .cache.recipes;
   `.cache.lastRefresh set .z.p;
   show "Cache loaded at ",string .z.p;
  }
@@ -64,20 +61,20 @@ loadAll:{[]
 / ACCESS
 / ============================================================================
 
-get:{[name]
-  if[not name in key data; '"Not cached: ",string name];
-  data name
+.cache.get:{[nm]
+  if[not nm in key .cache.cacheData; '"Not cached: ",string nm];
+  .cache.cacheData nm
  }
 
-has:{[name] name in key data}
+.cache.has:{[nm] nm in key .cache.cacheData}
 
-list:{[]
-  if[0 = count recipes; :([] name:`$(); table:`$(); horizonDays:`int$(); rows:`long$(); hasTransform:`boolean$())];
-  names:key recipes;
-  ([] name:names;
-    table:{.cache.recipes[x]`table} each names;
+.cache.cacheList:{[]
+  if[0 = count .cache.recipes; :([] nm:`$(); tblName:`$(); horizonDays:`int$(); rows:`long$(); hasTransform:`boolean$())];
+  names:key .cache.recipes;
+  ([] nm:names;
+    tblName:{.cache.recipes[x]`tblName} each names;
     horizonDays:{.cache.recipes[x]`horizonDays} each names;
-    rows:{$[x in key .cache.data; count .cache.data x; 0]} each names;
+    rows:{$[x in key .cache.cacheData; count .cache.cacheData x; 0]} each names;
     hasTransform:{not (::) ~ .cache.recipes[x]`transformFn} each names)
  }
 
@@ -85,16 +82,16 @@ list:{[]
 / REFRESH
 / ============================================================================
 
-refresh:{[] loadAll[]}
+.cache.refresh:{[] .cache.loadAll[]}
 
-startRefresh:{[ms]
+.cache.startRefresh:{[ms]
   `.cache.refreshMs set ms;
   .z.ts:{.cache.refresh[]};
   system "t ",string ms;
   show "Cache refresh timer started: ",string[ms],"ms";
  }
 
-stopRefresh:{[]
+.cache.stopRefresh:{[]
   system "t 0";
   show "Cache refresh timer stopped.";
  }
@@ -103,16 +100,14 @@ stopRefresh:{[]
 / ON-DEMAND QUERIES (for drill-down into uncached detail)
 / ============================================================================
 
-drillDown:{[tableName; asOfDate]
+.cache.drillDown:{[tblName; asOfDate]
   .dbWriter.reload[];
-  dates:asc distinct ?[tableName; (); (); (enlist `d)!(enlist `date)] `d;
+  dates:asc distinct ?[tblName; (); (); (enlist `d)!(enlist `date)] `d;
   currentDate:.dates.asOf[dates; asOfDate];
   previousDate:.dates.prev[dates; currentDate];
 
-  current:$[null currentDate; 0#([]); select from tableName where date = currentDate];
-  previous:$[null previousDate; 0#([]); select from tableName where date = previousDate];
+  current:$[null currentDate; 0#([]); select from tblName where date = currentDate];
+  previous:$[null previousDate; 0#([]); select from tblName where date = previousDate];
 
   `current`previous`currentDate`previousDate!(current; previous; currentDate; previousDate)
  }
-
-\d .

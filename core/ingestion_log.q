@@ -2,19 +2,16 @@
 / Tracks all ingestion activity - what was loaded, when, status, record counts
 / Persisted to the partitioned database at the end of each orchestrator tick
 / Reloaded from the database on startup so state survives restarts
-/
 / Dependencies: db_writer.q (for persistence)
-
-\d .ingestionLog
 
 / ============================================================================
 / LOG TABLE
 / ============================================================================
 
-persistTableName:`infra_ingestion_log
+.ingestionLog.persistTableName:`infra_ingestion_log
 
-init:{[]
-  `ingestion_log set ([]
+.ingestionLog.init:{[]
+  `.ingestionLog.tbl set ([]
     source:`symbol$();
     date:`date$();
     status:`symbol$();
@@ -27,40 +24,40 @@ init:{[]
   );
  }
 
-reload:{[dbPath]
+.ingestionLog.reload:{[dbPath]
   allDates:@[key; dbPath; {[e] `date$()}];
-  if[0 = count allDates; :init[]];
+  if[0 = count allDates; :.ingestionLog.init[]];
 
   loaded:@[
     {[dbPath; tblName]
       system "l ",1 _ string dbPath;
       if[tblName in tables[];
-        `ingestion_log set value tblName;
+        `.ingestionLog.tbl set value tblName;
         :1b];
       :0b
     };
-    (dbPath; persistTableName);
+    (dbPath; .ingestionLog.persistTableName);
     {[e] 0b}];
 
-  if[not loaded; init[]];
+  if[not loaded; .ingestionLog.init[]];
  }
 
 / ============================================================================
 / PERSISTENCE
 / ============================================================================
 
-persist:{[]
-  if[0 = count ingestion_log; :()];
-  dates:distinct ingestion_log`date;
+.ingestionLog.persist:{[]
+  if[0 = count .ingestionLog.tbl; :()];
+  dates:distinct .ingestionLog.tbl`date;
   {[dt]
-    subset:select from ingestion_log where date=dt;
-    .ingestionLog.writePartition[dt; subset];
+    subset:select from .ingestionLog.tbl where date = dt;
+    .ingestionLog.persistPartition[dt; subset];
   } each dates;
  }
 
-writePartition:{[dt; data]
+.ingestionLog.persistPartition:{[dt; data]
   dbPath:.dbWriter.dbPath;
-  partPath:` sv dbPath , `$string[dt] , persistTableName , `;
+  partPath:` sv dbPath , `$string[dt] , .ingestionLog.persistTableName , `;
   enumData:@[{[db; d] .Q.en[db; d]}[dbPath]; data; {[e] `ENUM_FAIL}];
   if[not `ENUM_FAIL ~ enumData;
     @[{[pp; d] pp set d}; (partPath; enumData); {[e] show "ingestion_log persist failed: ",e}]];
@@ -70,56 +67,54 @@ writePartition:{[dt; data]
 / WRITE OPERATIONS
 / ============================================================================
 
-markProcessing:{[source; dt; fp]
-  existing:select from ingestion_log where source=source, date=dt;
+.ingestionLog.markProcessing:{[src; dt; fp]
+  existing:select from .ingestionLog.tbl where source = src, date = dt;
   if[count existing;
     update status:`processing, filepath:fp, startTime:.z.p, retryCount:1+first retryCount
-      from `ingestion_log where source=source, date=dt;
+      from `.ingestionLog.tbl where source = src, date = dt;
     :()];
-  `ingestion_log insert (source; dt; `processing; fp; 0j; ""; .z.p; 0Np; 0i);
+  `.ingestionLog.tbl insert (src; dt; `processing; fp; 0j; ""; .z.p; 0Np; 0i);
  }
 
-markCompleted:{[source; dt; recCount]
+.ingestionLog.markCompleted:{[src; dt; recCount]
   update status:`completed, recordCount:recCount, endTime:.z.p
-    from `ingestion_log where source=source, date=dt;
+    from `.ingestionLog.tbl where source = src, date = dt;
  }
 
-markFailed:{[source; dt; errMsg]
+.ingestionLog.markFailed:{[src; dt; errMsg]
   update status:`failed, errorMsg:errMsg, endTime:.z.p
-    from `ingestion_log where source=source, date=dt;
+    from `.ingestionLog.tbl where source = src, date = dt;
  }
 
 / ============================================================================
 / READ OPERATIONS
 / ============================================================================
 
-isProcessed:{[source; dt]
-  0 < count select from ingestion_log where source=source, date=dt, status=`completed
+.ingestionLog.isProcessed:{[src; dt]
+  0 < count select from .ingestionLog.tbl where source = src, date = dt, status = `completed
  }
 
-completedSources:{[dt]
-  exec source from ingestion_log where date=dt, status=`completed
+.ingestionLog.completedSources:{[dt]
+  exec source from .ingestionLog.tbl where date = dt, status = `completed
  }
 
-allCompleted:{[sources; dt]
-  done:completedSources[dt];
-  all sources in done
+.ingestionLog.allCompleted:{[srcs; dt]
+  done:.ingestionLog.completedSources[dt];
+  all srcs in done
  }
 
-completedSince:{[ts]
-  select from ingestion_log where status=`completed, endTime >= ts
+.ingestionLog.completedSince:{[ts]
+  select from .ingestionLog.tbl where status = `completed, endTime >= ts
  }
 
-getFailed:{[]
-  select from ingestion_log where status=`failed
+.ingestionLog.getFailed:{[]
+  select from .ingestionLog.tbl where status = `failed
  }
 
-getByDate:{[dt]
-  select from ingestion_log where date=dt
+.ingestionLog.getByDate:{[dt]
+  select from .ingestionLog.tbl where date = dt
  }
 
-stats:{[]
-  select count i by status from ingestion_log
+.ingestionLog.stats:{[]
+  select count i by status from .ingestionLog.tbl
  }
-
-\d .

@@ -1,36 +1,33 @@
 / db_writer.q
-/ Save tables to the partitioned database with naming convention enforcement
+/ Write tables to the partitioned database with naming convention enforcement
 / If a schema is registered for a table name, validates data before saving
 / Gatekeeper: nothing enters the database without passing through here
-/
 / Dependencies: validator.q
-
-\d .dbWriter
 
 / ============================================================================
 / CONFIGURATION
 / ============================================================================
 
-dbPath:`:curated_db
-allowedDomains:`$()
+.dbWriter.dbPath:`:curated_db
+.dbWriter.allowedDomains:`$()
 
-addDomain:{[domain]
-  if[not domain in .dbWriter.allowedDomains;
-    `.dbWriter.allowedDomains set .dbWriter.allowedDomains , domain];
+.dbWriter.addDomain:{[dom]
+  if[not dom in .dbWriter.allowedDomains;
+    `.dbWriter.allowedDomains set .dbWriter.allowedDomains , dom];
  }
 
-setDbPath:{[path] `.dbWriter.dbPath set path}
+.dbWriter.setDbPath:{[path] `.dbWriter.dbPath set path}
 
 / ============================================================================
 / NAMING CONVENTION
 / ============================================================================
 
-validateName:{[tableName]
-  nm:string tableName;
+.dbWriter.validateName:{[tblName]
+  nm:string tblName;
   if[not "_" in nm; :`valid`error!(0b; "Table name must follow {domain}_{category}_{...} pattern")];
-  domain:`$first "_" vs nm;
-  if[not domain in allowedDomains;
-    :`valid`error!(0b; "Unknown domain: ",string[domain],". Registered: ",", " sv string allowedDomains)];
+  dom:`$first "_" vs nm;
+  if[not dom in .dbWriter.allowedDomains;
+    :`valid`error!(0b; "Unknown domain: ",string[dom],". Registered: ",", " sv string .dbWriter.allowedDomains)];
   `valid`error!(1b; "")
  }
 
@@ -38,68 +35,57 @@ validateName:{[tableName]
 / PARTITIONED WRITES
 / ============================================================================
 
-save:{[tableName; data; dt]
-  nameCheck:validateName tableName;
-  if[not nameCheck`valid; :`success`error`recordCount!(0b; nameCheck`error; 0)];
+.dbWriter.writePartition:{[tblName; tbl; dt]
+  nameCheck:.dbWriter.validateName tblName;
+  if[not nameCheck`valid; 'nameCheck`error];
 
-  if[not 98h = type data; :`success`error`recordCount!(0b; "Data must be a table"; 0)];
-  if[0 = count data; :`success`error`recordCount!(0b; "Cannot save empty table"; 0)];
+  if[not 98h = type tbl; '"Data must be a table"];
+  if[0 = count tbl; '"Cannot save empty table"];
 
-  / If a schema exists for this table, validate against it
-  if[.validator.hasSchema[tableName];
-    schema:.validator.getSchema[tableName];
-    validation:.validator.validateSchema[data; schema];
+  if[.validator.hasSchema[tblName];
+    schema:.validator.getSchema[tblName];
+    validation:.validator.validateSchema[tbl; schema];
     if[not validation`valid;
-      :`success`error`recordCount!(0b; "Schema validation failed: ","; " sv validation`errors; 0)]];
+      '"Schema validation failed: ","; " sv validation`errors]];
 
-  / Enumerate symbols
-  enumData:@[{[db; d] .Q.en[db; d]}[dbPath]; data; {[e] `ENUM_FAIL}];
-  if[`ENUM_FAIL ~ enumData;
-    :`success`error`recordCount!(0b; "Symbol enumeration failed"; 0)];
+  enumData:@[{[db; d] .Q.en[db; d]}[.dbWriter.dbPath]; tbl; {[e] '"Enum failed: ",e}];
 
-  / Write to partition
-  partPath:` sv dbPath , (`$string dt) , tableName , `;
-  @[{[pp; d] pp set d}; (partPath; enumData);
-    {[e] :`success`error`recordCount!(0b; "Write failed: ",e; 0)}];
+  partPath:` sv .dbWriter.dbPath , (`$string dt) , tblName , `;
+  @[{[pp; d] pp set d}; (partPath; enumData); {[e] '"Write failed: ",e}];
 
-  `success`error`recordCount!(1b; ""; count data)
+  show "  Saved ",string[tblName]," for ",string[dt],": ",string[count tbl]," rows";
+  count tbl
  }
 
-saveMultiple:{[tableMap; dt]
-  {[tbl; data; dt] save[tbl; data; dt]}[; ; dt] ./: flip (key tableMap; value tableMap)
+.dbWriter.writeMultiple:{[tableMap; dt]
+  {[dt; tblName; tbl] .dbWriter.writePartition[tblName; tbl; dt]}[dt] ./: flip (key tableMap; value tableMap)
  }
 
-saveFlat:{[tableName; data]
-  nameCheck:validateName tableName;
-  if[not nameCheck`valid; :`success`error!(0b; nameCheck`error)];
+.dbWriter.writeFlat:{[tblName; tbl]
+  nameCheck:.dbWriter.validateName tblName;
+  if[not nameCheck`valid; 'nameCheck`error];
 
-  enumData:@[{[db; d] .Q.en[db; d]}[dbPath]; data; {[e] `ENUM_FAIL}];
-  if[`ENUM_FAIL ~ enumData; :`success`error!(0b; "Symbol enumeration failed")];
+  enumData:@[{[db; d] .Q.en[db; d]}[.dbWriter.dbPath]; tbl; {[e] '"Enum failed: ",e}];
 
-  tblPath:` sv dbPath , tableName;
-  @[{[p; d] p set d}; (tblPath; enumData);
-    {[e] :`success`error!(0b; "Write failed: ",e)}];
-
-  `success`error!(1b; "")
+  tblPath:` sv .dbWriter.dbPath , tblName;
+  @[{[p; d] p set d}; (tblPath; enumData); {[e] '"Write failed: ",e}];
  }
 
 / ============================================================================
 / DATABASE OPERATIONS
 / ============================================================================
 
-reload:{[]
+.dbWriter.reload:{[]
   @[{system "l ",1 _ string .dbWriter.dbPath}; ::; {[e] show "DB reload failed: ",e}];
  }
 
-listPartitions:{[]
-  dates:key dbPath;
+.dbWriter.listPartitions:{[]
+  dates:key .dbWriter.dbPath;
   asc "D"$string dates where not null "D"$string dates
  }
 
-listTables:{[dt]
-  partPath:` sv dbPath , `$string dt;
+.dbWriter.listTables:{[dt]
+  partPath:` sv .dbWriter.dbPath , `$string dt;
   tbls:key partPath;
   tbls where not tbls in `sym`.d
  }
-
-\d .
