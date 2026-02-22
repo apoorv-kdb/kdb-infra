@@ -45,6 +45,19 @@ libFiles:libFiles where libFiles like "*.q";
 show "Loading server/cache.q";
 system "l ",ROOT,"/server/cache.q";
 
+/ --- HTTP layer (catalog + query endpoints) ---
+show "Loading lib/catalog.q";
+system "l ",ROOT,"/lib/catalog.q";
+
+show "Loading server/http.q";
+system "l ",ROOT,"/server/http.q";
+
+show "Loading server/cat_handlers.q";
+system "l ",ROOT,"/server/cat_handlers.q";
+
+show "Loading server/qry_handlers.q";
+system "l ",ROOT,"/server/qry_handlers.q";
+
 / ============================================================================
 / STUBS - so app config.q loads cleanly in server context
 / ============================================================================

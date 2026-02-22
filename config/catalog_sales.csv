@@ -1,0 +1,6 @@
+app,table,field,label,type,role,format,enabled
+sales,sales_by_region,region,Region,symbol,categorical,,1
+sales,sales_by_region,product,Product,symbol,categorical,,1
+sales,sales_by_region,total_revenue,Total Revenue,float,value,currency,1
+sales,sales_by_region,total_quantity,Total Quantity,long,value,integer,1
+sales,sales_by_region,date,Date,date,temporal,,1

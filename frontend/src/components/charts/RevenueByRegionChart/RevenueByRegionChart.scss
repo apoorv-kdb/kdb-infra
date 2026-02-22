@@ -1,0 +1,15 @@
+@use '../../../styles/variables' as *;
+
+.region-chart {
+  width: 100%;
+  padding: $space-sm 0;
+
+  &__loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 280px;
+    color: var(--color-text-muted);
+    font-size: $font-size-sm;
+  }
+}

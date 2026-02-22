@@ -1,0 +1,39 @@
+@use '../../styles/variables' as *;
+
+.applied-bar {
+  display: flex;
+  align-items: center;
+  gap: $space-md;
+  padding: 5px $space-md;
+  background: #1565C0;
+  border-bottom: 1px solid #0D47A1;
+  min-height: 32px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+
+  &__group {
+    display: flex;
+    align-items: center;
+    gap: $space-xs;
+  }
+
+  &__group-label {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-bold;
+    color: rgba(255,255,255,0.5);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+
+  &__chip {
+    font-size: $font-size-xs;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: rgba(255,255,255,0.92);
+    padding: 2px 7px;
+    border-radius: $border-radius-pill;
+    white-space: nowrap;
+    font-weight: $font-weight-medium;
+  }
+}

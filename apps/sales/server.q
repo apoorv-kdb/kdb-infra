@@ -1,45 +1,69 @@
 / apps/sales/server.q
-/ Sales domain server — serves data from the sales/core app
-/ Start with: q apps/sales/server.q -p 5001 -dbPath /data/databases/prod
+/ Sales app server — serves data from the sales/core app and the React frontend
+/
+/ Endpoints:
+/   GET  /catalog/fields          → [{field, label, type, format}]
+/   GET  /catalog/filter-options  → [{key, value}]  (all categorical field values)
+/   POST /query/table             → [{<field>, asofValue, prevValue, change, changePct}]
+/   POST /query/trend             → [{date, category, value}]
+/
+/ Start:
+/   q apps/sales/server.q -p 5010 -dbPath /data/databases/prod
+/   or: ./bin/start-sales-server.sh
+/
+/ Command line args:
+/   -p        port (required)
+/   -dbPath   path to HDB (default: <ROOT>/curated_db)
+/   -catPath  path to catalog CSV (default: <ROOT>/config/catalog_sales.csv)
 
-\l server/server_init.q
+/ ROOT must be set before server_init so all subsequent \l calls use absolute paths
+ROOT:rtrim ssr[first system $[.z.o like "w*"; "echo %CD%"; "pwd"]; "\\"; "/"]
+system "l ",ROOT,"/server/server_init.q";
 
-/ Load all sales app configs (registers schemas + domain)
+/ Load app schemas + register with orchestrator stubs
 loadDomainConfigs[`sales];
+
+/ ============================================================================
+/ CATALOG
+/ ============================================================================
+
+opts:.Q.opt .z.x;
+.srv.catPath:$[`catPath in key opts; first opts`catPath; ROOT,"/config/catalog_sales.csv"];
+.catalog.load[.srv.catPath; `sales];
 
 / ============================================================================
 / CACHE RECIPES
 / ============================================================================
 
-/ Transactions detail (90-day window)
-.cache.register[`txns;       `sales_transactions; 90;  ::];
+/ Regional aggregation — 1 year window for both table (DoD) and trend queries
+.cache.register[`sales_by_region; `sales_by_region; 365; ::];
 
-/ Regional aggregation (1-year window)
-.cache.register[`by_region;  `sales_by_region;    365; ::];
-
-/ Regional trend with rolling 30-day avg
-.cache.register[`region_trend; `sales_by_region; 365;
-  {[d] .rolling.addRolling[d; `total_revenue; 30; `avg; `revenue_30d_avg]}];
-
-.cache.loadAll[]
-.cache.startRefresh[600000]
+.cache.loadAll[];
+.cache.startRefresh[600000];  / reload from HDB every 10 minutes
 
 / ============================================================================
-/ QUERY API
+/ HTTP ROUTES
 / ============================================================================
 
-/ Regional summary for a date
-getByRegion:{[dt]
-  select from .cache.get[`by_region] where date = dt
- }
+.http.addRoute[`GET;  "/catalog/fields";        .catHandler.fields];
+.http.addRoute[`GET;  "/catalog/filter-options"; .catHandler.filterOptions];
+.http.addRoute[`POST; "/query/table";            .qryHandler.table];
+.http.addRoute[`POST; "/query/trend";            .qryHandler.trend];
 
-/ Regional trend with rolling avg
-getRegionTrend:{[rgn; startDt; endDt]
-  select from .cache.get[`region_trend]
-    where region = rgn, date within (startDt; endDt)
- }
+/ ============================================================================
+/ STARTUP SUMMARY
+/ ============================================================================
 
-/ Drill down to transaction detail
-drillDown:{[dt; rgn]
-  select from .cache.get[`txns] where date = dt, region = rgn
- }
+show "";
+show "========================================";
+show "Sales server ready";
+show "========================================";
+show "DB:      ",string .dbWriter.dbPath;
+show "Catalog: ",.srv.catPath;
+show "Routes:";
+show "  GET  /catalog/fields";
+show "  GET  /catalog/filter-options";
+show "  POST /query/table";
+show "  POST /query/trend";
+show "========================================";
+show "";

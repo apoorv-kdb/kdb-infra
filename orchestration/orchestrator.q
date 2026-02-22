@@ -13,7 +13,7 @@
   app:`symbol$();
   required:`boolean$();
   directory:`symbol$();
-  filePattern:();
+  filePattern:`symbol$();
   delimiter:`char$();
   frequency:`symbol$()
  );
@@ -63,7 +63,7 @@
     files:@[key; dir; {[e] `symbol$()}];
     if[0 = count files; :results];
 
-    matched:files where files like pattern;
+    matched:files where files like string pattern;
     if[0 = count matched; :results];
 
     {[results; src; dir; fn]
@@ -260,7 +260,7 @@
     dir:first exec directory from .orchestrator.source_config where source = src;
     pat:first exec filePattern from .orchestrator.source_config where source = src;
     files:@[key; dir; {[e] `symbol$()}];
-    matched:files where files like pat;
+    matched:files where files like string pat;
     dateMatched:matched where dt = .orchestrator.extractDate each matched;
     if[0 = count dateMatched; :()];
     ` sv dir , first dateMatched

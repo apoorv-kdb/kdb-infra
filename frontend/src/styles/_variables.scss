@@ -1,0 +1,85 @@
+$blue-50:  #E3F2FD;
+$blue-100: #BBDEFB;
+$blue-200: #90CAF9;
+$blue-400: #42A5F5;
+$blue-700: #1976D2;
+$blue-800: #1565C0;
+$blue-900: #0D47A1;
+
+$teal-600: #00838F;
+$teal-700: #00796B;
+$teal-100: #B2EBF2;
+
+$grey-50:  #FAFAFA;
+$grey-100: #F5F5F5;
+$grey-200: #EEEEEE;
+$grey-300: #E0E0E0;
+$grey-500: #9E9E9E;
+$grey-700: #616161;
+$grey-900: #212121;
+
+$slate-800: #37474F;
+$slate-900: #263238;
+
+$green-100: #C8E6C9;
+$green-800: #2E7D32;
+$red-100:   #FFCDD2;
+$red-800:   #C62828;
+$amber-600: #FFB300;
+$amber-100: #FFF8E1;
+
+:root {
+  --color-bg-app:          #FFFFFF;
+  --color-bg-surface:      #FFFFFF;
+  --color-bg-elevated:     #{$grey-100};
+  --color-bg-control:      #E8EDF2;
+  --color-bg-control-bar:  #F0F4F8;
+  --color-border:          #{$grey-300};
+  --color-border-light:    #{$grey-200};
+  --color-text-primary:    #{$grey-900};
+  --color-text-secondary:  #{$grey-700};
+  --color-text-muted:      #{$grey-500};
+  --color-text-inverse:    #FFFFFF;
+  --color-primary:         #{$blue-700};
+  --color-primary-dark:    #{$blue-900};
+  --color-primary-deep:    #{$blue-800};
+  --color-primary-light:   #{$blue-100};
+  --color-primary-text:    #FFFFFF;
+  --color-teal:            #{$teal-600};
+  --color-teal-light:      #{$teal-100};
+  --color-teal-dark:       #{$teal-700};
+  --color-slate:           #{$slate-800};
+  --color-slate-dark:      #{$slate-900};
+  --color-positive:        #{$green-800};
+  --color-positive-light:  #{$green-100};
+  --color-negative:        #{$red-800};
+  --color-negative-light:  #{$red-100};
+  --color-warning:         #{$amber-600};
+  --color-warning-light:   #{$amber-100};
+  --shadow-sm:  0 1px 2px rgba(0,0,0,0.08);
+  --shadow-md:  0 2px 6px rgba(0,0,0,0.12);
+  --shadow-lg:  0 4px 12px rgba(0,0,0,0.16);
+}
+
+$font-family:          -apple-system, 'Segoe UI', sans-serif;
+$font-size-xs:         10px;
+$font-size-sm:         11px;
+$font-size-base:       12px;
+$font-size-md:         14px;
+$font-size-lg:         16px;
+$font-weight-normal:   400;
+$font-weight-medium:   500;
+$font-weight-semibold: 600;
+$font-weight-bold:     700;
+
+$space-xs:  4px;
+$space-sm:  8px;
+$space-md:  16px;
+$space-lg:  24px;
+$space-xl:  32px;
+
+$border-radius-sm:   3px;
+$border-radius-md:   6px;
+$border-radius-lg:   10px;
+$border-radius-pill: 999px;
+$card-accent-width:  3px;
