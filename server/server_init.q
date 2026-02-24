@@ -8,7 +8,7 @@
 / ROOT DIRECTORY
 / ============================================================================
 
-ROOT:rtrim ssr[first system $[.z.o like "w*"; "echo %CD%"; "pwd"]; "\\"; "/"]
+ROOT:rtrim ssr[{$[10h=type x;x;first x]} system "cd"; "\\"; "/"]
 
 / ============================================================================
 / PARSE COMMAND LINE ARGS
@@ -92,7 +92,7 @@ loadDomainConfigs:{[dom]
     configFile:domainPath,"/",string[entry],"/config.q";
     if[not () ~ @[key; hsym `$configFile; {[e] ()}];
       show "  Loading ",configFile;
-      @[system; "l ",configFile; {[e] show "    [WARN] Failed: \",e}]];
+      @[system; "l ",configFile; {[e] show "    [WARN] Failed: ",e}]];
   }[domainPath] each entries;
  }
 

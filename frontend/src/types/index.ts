@@ -4,9 +4,9 @@ export interface KVOption { key: string; value: string; }
 // CATALOG TYPES
 // =============================================
 export interface CatalogField {
-  field: string;
-  label: string;
-  type:  'categorical' | 'value';
+  field:     string;
+  label:     string;
+  fieldType: 'categorical' | 'value';
 }
 
 export interface DimensionDef {

@@ -40,7 +40,7 @@
 
   cutoff:.z.d - horizon;
 
-  raw:@[{[t; c] select from t where date >= c}; (tblName; cutoff);
+  raw:.[{[t; c] select from t where date >= c}; (tblName; cutoff);
     {[e] show "Cache load failed: ",e; 0#([])}];
 
   result:$[(::) ~ fn; raw; @[fn; raw; {[e] show "Cache transform failed: ",e; raw}]];

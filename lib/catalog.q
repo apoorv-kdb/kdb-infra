@@ -1,12 +1,12 @@
 / catalog.q
 / Per-app field catalog loaded from CSV at server startup
 / Drives HTTP query validation and /catalog/* endpoint responses
-/
+
 / CSV columns: app, table, field, label, type, role, format, enabled
 /   role:   categorical | value | temporal
 /   type:   kdb+ type string: symbol | float | long | date | timestamp
 /   format: currency | integer | percent | date | (empty)
-/
+
 / Dependencies: none
 
 .catalog.fields:flip `app`table`field`label`type`role`format`enabled!8#enlist`$()

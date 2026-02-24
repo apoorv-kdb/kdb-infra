@@ -14,8 +14,8 @@ const FieldPicker = ({
   fields, measure, fieldConfigs,
   onMeasureChange, onFieldConfigsChange,
 }: FieldPickerProps) => {
-  const categoricals = fields.filter(f => f.type === 'categorical');
-  const values       = fields.filter(f => f.type === 'value');
+  const categoricals = fields.filter(f => f.fieldType === 'categorical');
+  const values       = fields.filter(f => f.fieldType === 'value');
 
   const dragItem     = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);

@@ -9,7 +9,7 @@
 / ROOT DIRECTORY
 / ============================================================================
 
-ROOT:rtrim ssr[first system $[.z.o like "w*"; "echo %CD%"; "pwd"]; "\\"; "/"]
+ROOT:rtrim ssr[{$[10h=type x;x;first x]} system "cd"; "\\"; "/"]
 
 / ============================================================================
 / PARSE COMMAND LINE ARGS

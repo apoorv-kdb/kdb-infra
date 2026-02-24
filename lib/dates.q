@@ -10,8 +10,8 @@
 
 / Get the previous date before a given date
 .dates.prev:{[dates; dt]
-  prior:dates where dates < dt;
-  $[0 = count prior; 0Nd; last prior]
+  prevDates:dates where dates < dt;
+  $[0 = count prevDates; 0Nd; last prevDates]
  }
 
 / Get the next date after a given date
