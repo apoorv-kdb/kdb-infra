@@ -1,9 +1,6 @@
-/ apps/sales/core — config.q
-/ Handles: daily transactions, saves detail + regional aggregation
-
-/ ============================================================================
-/ DOMAIN
-/ ============================================================================
+/ apps/sales/core/config.q
+/ Registers sources and app with the orchestrator.
+/ Schema definitions removed — catalog CSV is the single source of truth.
 
 .dbWriter.addDomain[`sales];
 
@@ -11,38 +8,19 @@
 / SOURCES
 / ============================================================================
 
-/ Directory defaults to <ROOT>/data/csv — pass -csvPath on command line to override
-csvDir:$[`csvPath in key .Q.opt .z.x; first (.Q.opt .z.x)`csvPath; ROOT,"/data/csv"];
+/ csvDir — resolved from argCsvPath set by orchestrator startup.
+/ Data lives OUTSIDE the code folder by design — never under ROOT.
+csvDir:$[`argCsvPath in key `.;  argCsvPath;
+         `csvPath in key .Q.opt .z.x; first (.Q.opt .z.x)`csvPath;
+         "C:/data/csv"];
 
 .orchestrator.addSources[
   ((`source`app`required`directory`filePattern`delimiter`frequency)!
-    (`sales_transactions; `sales_core; 1b; hsym `$csvDir; `$"sales_transactions_*.csv"; ","; `daily))
- ];
-
-/ ============================================================================
-/ SCHEMAS - source
-/ ============================================================================
-
-.validator.registerSchema[`sales_transactions;
-  `columns`types`mandatory!(
-    `date`region`product`quantity`revenue;
-    "DSSJI";
-    `date`region`product`revenue)
- ];
-
-/ ============================================================================
-/ SCHEMAS - derived
-/ ============================================================================
-
-.validator.registerSchema[`sales_by_region;
-  `columns`types`mandatory!(
-    `date`region`total_revenue`total_quantity`net_quantity;
-    "DSJJJ";
-    `date`region`total_revenue)
+    (`sales_transactions; `sales; 1b; hsym `$csvDir; `$"sales_transactions_*.csv"; ","; `daily))
  ];
 
 / ============================================================================
 / REGISTER
 / ============================================================================
 
-.orchestrator.registerApp[`sales_core; .salesCore.refresh];
+.orchestrator.registerApp[`sales; .salesCore.refresh];

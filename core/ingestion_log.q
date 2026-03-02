@@ -1,8 +1,8 @@
-/ ingestion_log.q
-/ Tracks all ingestion activity - what was loaded, when, status, record counts
-/ Persisted to the partitioned database at the end of each orchestrator tick
-/ Reloaded from the database on startup so state survives restarts
-/ Dependencies: db_writer.q (for persistence)
+/ core/ingestion_log.q
+/ Tracks all ingestion activity — source, date, status, record counts.
+/ Persisted to partitioned DB at end of each orchestrator tick.
+/ Reloaded from DB on startup so state survives restarts.
+/ Dependencies: db_writer.q
 
 / ============================================================================
 / LOG TABLE
@@ -32,6 +32,9 @@
     if[not `.ingestionLog.tbl in key `.; .ingestionLog.init[]];
   }; dbPath; {[e] .ingestionLog.init[]}];
  }
+
+/ Alias so callers can use either name
+.ingestionLog.load:.ingestionLog.reload;
 
 / ============================================================================
 / PERSISTENCE
@@ -67,8 +70,9 @@
   `.ingestionLog.tbl insert (src; dt; `processing; fp; 0j; ""; .z.p; 0Np; 0i);
  }
 
-.ingestionLog.markCompleted:{[src; dt; recCount]
-  update status:`completed, recordCount:`long$recCount, endTime:.z.p
+.ingestionLog.markCompleted:{[src; dt; recCount; warnings]
+  warnMsg:$[(::)~warnings; ""; 0=count warnings; ""; "; " sv warnings];
+  update status:`completed, recordCount:`long$recCount, endTime:.z.p, errorMsg:enlist warnMsg
     from `.ingestionLog.tbl where source = src, date = dt;
  }
 
@@ -101,3 +105,5 @@
 .ingestionLog.stats:{[]
   select count i by status from .ingestionLog.tbl
  }
+
+show "  ingestion_log.q loaded"

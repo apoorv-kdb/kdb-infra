@@ -1,135 +1,161 @@
-# kdb-infra
+# KDB+ Analytics Infrastructure
 
-A lightweight, configuration-driven framework for managing analytical data pipelines in kdb+/q.
+A multi-application analytics platform built on KDB+/q. Designed to support financial analytical applications across domains — capital, margin, liquidity, PnL, funding — through shared ingestion infrastructure, a partitioned historical database, and reusable query primitives.
 
-Built for teams running 10-20+ analytical applications off a shared partitioned database where data arrives as CSVs from multiple upstream systems. The framework handles ingestion, validation, orchestration, retention, and serving so that each application can focus on its own analytical logic.
+---
 
-## The Problem
+## Architecture in One Paragraph
 
-Without shared infrastructure, each analytical application ends up with its own ingestion script, its own validation (or none), its own way of writing to the database, and its own definition of "clean data." Over time this leads to duplicated code, inconsistent data quality, and a database that becomes a dumping ground for data nobody fully understands.
+CSV files land in a watched directory. An orchestrator process scans on a timer, validates files against a metadata catalog, transforms and aggregates the data, and writes partitions to a shared KDB+ historical database. Each application runs its own server process that loads from the shared database into an in-memory cache and exposes query functions to consuming frontends. A catalog CSV per application drives column mapping, type casting, validation, and field metadata — adding a new data source or accepting a new column alias requires only a catalog edit, no code changes.
 
-## What This Framework Does
+For a full design walkthrough see [ARCHITECTURE.md](ARCHITECTURE.md).
 
-- **Validates before ingesting.** Every dataset has a schema. Data that doesn't conform gets rejected with a clear error, not silently loaded.
-- **Enforces naming conventions.** Tables in the partitioned database must follow a `{domain}_{category}_{granularity}` pattern. No ad-hoc table names.
-- **Orchestrates automatically.** A timer-based orchestrator scans for new files, checks dependencies across sources, and triggers the right application when all its data is ready.
-- **Tracks everything.** An ingestion log records what was loaded, when, whether it succeeded or failed, and how many records. Persisted to the database so it survives restarts.
-- **Archives processed files.** CSVs move from the landing zone to a dated archive after successful ingestion.
-- **Manages retention.** Configurable policies prune old partitions — keep daily history for a year, monthly snapshots for two years, then purge.
-- **Provides a shared library.** Common analytical operations — hierarchy flattening, rolling statistics, period comparisons, point-in-time joins, pivoting, filtering — available as stateless functions any app or server can use.
-- **Supports server processes.** A cache framework lets server processes load tables from the database, apply transforms, hold results in memory, and refresh on a timer.
-- **Supports dual environments.** Run prod and prod-parallel from the same codebase with different command line args.
+---
 
-## What This Framework Does Not Do
+## Prerequisites
 
-- **Application logic.** Each app owns its own transformations, aggregations, and serving strategy. The framework provides tools; the app decides what to do with them.
-- **Frontend.** No UI components. This is backend data infrastructure only.
-- **Real-time streaming.** Designed for batch/EOD analytical workloads where data arrives as files.
+- KDB+ 4.x (personal or commercial licence)
+- Linux in production (see [docs/OPERATIONS.md](docs/OPERATIONS.md) for path changes from dev)
+- Development was done on Windows — paths use `C:/data/` convention
 
-## Project Structure
+---
+
+## Directory Layout
 
 ```
 kdb-infra/
-├── core/
-│   ├── validator.q           # Schema registry + validation rules
-│   ├── csv_loader.q          # Load -> validate -> type cast
-│   ├── ingestion_log.q       # Ingestion tracking, persisted to DB
-│   └── db_writer.q           # Save to partitioned DB, enforce naming
-├── orchestration/
-│   └── orchestrator.q        # Timer loop, scanning, dependency check, dispatch
-├── monitoring/
-│   └── monitoring.q          # Failure alerts, staleness, disk health
-├── maintenance/
-│   └── retention_manager.q   # Partition cleanup per retention policy
-├── lib/
-│   ├── hierarchy.q           # Flatten hierarchical data
-│   ├── rolling.q             # Windowed statistics (moving avg, std, etc.)
-│   ├── filters.q             # Inclusion/exclusion filtering
-│   ├── dates.q               # AsOf resolution, business days, date ranges
-│   ├── comparison.q          # Period-over-period deltas and movers
-│   ├── pivot.q               # Long <-> wide reshaping
-│   └── temporal_join.q       # Point-in-time reference data joins
-├── server/
-│   ├── server_init.q         # Entry point for server processes
-│   └── cache.q               # Recipe-based cache management
-├── schemas/                   # One file per source/derived table
-├── sources.q                  # Source -> app -> path -> pattern -> required
-└── init.q                     # Entry point for orchestrator processes
+├── orchestration/      Central ingestion loop
+├── apps/sales/         Sales application (reference implementation)
+├── core/               Shared ingestion infrastructure
+├── lib/                Reusable analytical primitives
+├── server/             Shared server infrastructure
+├── config/             Catalog CSV files
+└── docs/               Extended documentation
 ```
 
-## Two Entry Points
+Data lives **outside** the code folder by design:
 
-**Orchestrator** — ingests data, writes to the database:
-```bash
-q init.q -p 9000 -dbPath /data/databases/prod
+```
+/data/
+├── csv/                Drop CSV files here
+└── databases/
+    └── prod_parallel/  KDB+ partitioned database
 ```
 
-**Server** — reads from the database, serves queries:
-```bash
-q server/server_init.q -p 9001 -dbPath /data/databases/prod
-```
+---
 
 ## Quick Start
 
-**Orchestrator side:**
-```q
-.dbWriter.addDomain[`funding]
-\l ../apps/funding/collateral/data_refresh.q
-.orchestrator.registerApp[`funding_collateral; .funding.collateral.refresh]
-.orchestrator.start[]
+### 1. One-time setup
+
+Create data directories:
+```bash
+mkdir -p /data/csv
+mkdir -p /data/databases/prod_parallel
 ```
 
-**Server side:**
-```q
-/ Register what to cache, how far back, and what transform to apply
-.cache.register[`collateral_flat; `funding_collateral_source; 365;
-  {[data] .hierarchy.flatten[data; `h_level1`h_level2`h_level3; `notional; enlist `date]}]
-
-.cache.register[`collateral_by_ccy; `funding_collateral_by_currency; 90; ::]
-
-.cache.loadAll[]
-.cache.startRefresh[600000]
-
-/ Query cached data
-data:.cache.get[`collateral_by_ccy]
-filtered:.filters.applyBoth[data; (enlist `currency)!(enlist `USD`EUR); ::]
+Copy seed CSV files:
+```bash
+cp data/csv/*.csv /data/csv/
 ```
 
-## Shared Library
-
-The `lib/` modules are stateless functions — table in, table out. Used by both data_refresh scripts and server processes.
-
-| Module | Purpose |
-|--------|---------|
-| `hierarchy.q` | Flatten wide level columns to parent-child format |
-| `rolling.q` | Moving average, std deviation, sum, min, max, median |
-| `filters.q` | Apply inclusion filters and exclusions on any table |
-| `dates.q` | AsOf/previous date resolution, business day logic |
-| `comparison.q` | Period-over-period deltas, top movers, new/dropped entries |
-| `pivot.q` | Reshape long to wide and wide to long |
-| `temporal_join.q` | Point-in-time joins for time-varying reference data |
-
-## Dual Environment
+### 2. Start the orchestrator
 
 ```bash
-# Prod
-q init.q -p 9000 -dbPath /data/databases/prod
-
-# QA (leaner retention)
-q init.q -p 8000 -dbPath /data/databases/prod_parallel -dailyRetention 90 -monthlyRetention 90
+q orchestration/orchestrator.q -p 8000 -dbPath /data/databases/prod_parallel -csvPath /data/csv
 ```
 
-Same code, separate databases, independent orchestrators.
+On startup you should see:
+```
+Apps:    sales_core
+Sources: 1
+```
+
+The orchestrator immediately runs its first scan. Watch for:
+```
+[OK] sales_core completed for 2026.01.27 (207 total rows)
+```
+
+### 3. Start the sales app server
+
+In a new terminal:
+```bash
+q apps/sales/server.q -p 5010 -dbPath /data/databases/prod_parallel
+```
+
+You should see:
+```
+Cached sales_by_region: 207 rows
+Sales server ready
+```
+
+---
+
+## Adding a New Application
+
+See [docs/EXTENDING.md](docs/EXTENDING.md) for the full step-by-step guide with a worked example.
+
+The short version: write a catalog CSV, a `data_refresh.q`, a `config.q`, and a `server.q`. The orchestrator auto-discovers new apps — no changes to shared infrastructure needed.
+
+---
+
+## Key Operations
+
+**Force reprocessing a date:**
+```q
+.orchestrator.resetSource[`sales_transactions; 2026.01.27]
+```
+
+**Check orchestrator status:**
+```q
+.orchestrator.status[]
+```
+
+**Manual refresh (without waiting for timer):**
+```q
+`.orchestrator.isRunning set 0b
+.orchestrator.orchestratorRun[]
+```
+
+**Inspect cache:**
+```q
+.cache.get `sales_by_region
+```
+
+**Test a query handler directly:**
+```q
+.qryHandler.table[`field`measure`asofDate`prevDate`filters`exclusions!(
+  "region"; "total_revenue"; "2026-02-24"; "2026-01-27"; ()!(); ()!())]
+```
+
+---
+
+## Repository Layout Reference
+
+| Path | Purpose |
+|------|---------|
+| `orchestration/orchestrator.q` | Timer-driven ingestion loop |
+| `core/csv_loader.q` | Read CSV → typed table using catalog |
+| `core/db_writer.q` | Write and reload HDB partitions |
+| `core/ingestion_log.q` | Track processed source+date pairs |
+| `lib/catalog.q` | Load catalog, rename, validate, cast |
+| `lib/query.q` | Movement, spot, trend query handlers |
+| `lib/cat_handlers.q` | Catalog query functions (fields, filter options) |
+| `server/cache.q` | In-memory table cache with refresh timer |
+| `server/server_init.q` | Shared server load sequence |
+| `config/catalog_sales.csv` | Field definitions for sales app |
+| `apps/sales/core/data_refresh.q` | Sales transform logic |
+| `apps/sales/core/config.q` | Sales source registration |
+| `apps/sales/server.q` | Sales server — cache + function exposure |
+
+---
 
 ## Documentation
 
-See [TECHNICAL.md](TECHNICAL.md) for detailed module documentation, the orchestrator flow, library API reference, cache patterns, and naming conventions.
-
-## Requirements
-
-- kdb+ 3.5+
-- Linux (file operations and disk checks use standard Linux commands)
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+| Document | Contents |
+|----------|---------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | System design, data flow, design decisions |
+| [docs/EXTENDING.md](docs/EXTENDING.md) | How to add a new application end-to-end |
+| [docs/CATALOG.md](docs/CATALOG.md) | Catalog CSV column reference |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Linux porting, debugging, routine operations |
+| [docs/QUERY_CONTRACT.md](docs/QUERY_CONTRACT.md) | Query handler integration reference |

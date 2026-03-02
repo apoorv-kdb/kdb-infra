@@ -1,7 +1,7 @@
-/ orchestrator.q
-/ Central coordination loop: scan, filter, group, dependency check, dispatch
-/ Runs on .z.ts timer at configurable interval
-/ Dependencies: csv_loader.q, ingestion_log.q, db_writer.q, monitoring.q
+/ orchestration/orchestrator.q
+/ Central coordination loop: scan, filter, group, dependency check, dispatch.
+/ Runs on .z.ts timer at configurable interval.
+/ Dependencies: csv_loader.q, ingestion_log.q, db_writer.q
 
 / ============================================================================
 / CONFIGURATION
@@ -49,8 +49,6 @@
 / FILE SCANNING
 / ============================================================================
 
-/ Scan all source directories for files matching patterns
-/ Returns: table of (source; date; filepath)
 .orchestrator.scanAllSources:{[]
   results:([] source:`symbol$(); date:`date$(); filepath:`symbol$());
 
@@ -91,7 +89,7 @@
           if[fn[i+7] = fn[i+4];
             if[all fn[i + 8 9] in "0123456789";
               dt:@["D"$; fn i + til 10; 0Nd];
-              if[not null dt; :dt]]]]]];
+              if[not null dt; :dt]]]]]]
     i+:1];
 
   / Try YYYYMMDD (8 consecutive digits)
@@ -110,7 +108,8 @@
 / WORK IDENTIFICATION
 / ============================================================================
 
-.orchestrator.identifyWork:{[scanned]
+.orchestrator.identifyWork:{[]
+  scanned:.orchestrator.scanAllSources[];
   select from scanned where not .ingestionLog.isProcessed'[source; date]
  }
 
@@ -169,8 +168,8 @@
       row:(0!grouped) idx;
       appName:row`app;
       dt:row`date;
-      srcs:raze row`sources;
-      fps:raze row`filepaths;
+      srcs:row`sources;
+      fps:row`filepaths;
 
       if[.orchestrator.dependenciesMet[appName; dt; srcs];
         show "  Dispatching ",string[appName]," for ",string dt;
@@ -183,10 +182,6 @@
   show "[4/4] Persisting ingestion log...";
   @[.ingestionLog.persist; ::;
     {[e] show "  [ERROR] Log persist failed: ",e}];
-
-  / Monitoring
-  @[.monitoring.checkAll; ::;
-    {[e] show "  [WARN] Monitoring check failed: ",e}];
 
   show "Tick complete.";
   show "----------------------------------------";
@@ -229,7 +224,7 @@
   show "  [OK] ",string[appName]," completed for ",string[dt],
     " (",string[totalRows]," total rows)";
  }
-      
+
 / ============================================================================
 / TIMER CONTROL
 / ============================================================================
@@ -279,10 +274,6 @@
     count .orchestrator.source_config)
  }
 
-/ Reset a source+date so it will be reprocessed on the next tick
-/ Removes only this source's row from the persisted log - other sources for the same date are unaffected
-/ The DB data partitions (e.g. sales_transactions) are left intact - writePartition overwrites them
-/ Usage: .orchestrator.resetSource[`sales_transactions; 2024.02.12]
 .orchestrator.resetSource:{[src; dt]
   / Remove from in-memory log
   delete from `.ingestionLog.tbl where source = src, date = dt;
@@ -298,3 +289,80 @@
 
   show "Reset complete - ",string[src]," for ",string[dt]," will reprocess on next tick";
  }
+
+/ ============================================================================
+/ STARTUP
+/ ============================================================================
+
+ROOT:rtrim ssr[{$[10h=type x;x;first x]} system "cd"; "\\"; "/"]
+
+opts:.Q.opt .z.x;
+
+/ Paths — both live outside the code folder
+argDbPath:$[`dbPath in key opts; first opts`dbPath; "C:/data/databases/prod_parallel"];
+argCsvPath:$[`csvPath in key opts; first opts`csvPath; "C:/data/csv"];
+
+show "========================================";
+show "Loading Orchestrator";
+show "  ROOT:    ",ROOT;
+show "  DB:      ",argDbPath;
+show "  CSV:     ",argCsvPath;
+show "========================================";
+
+/ Core infrastructure
+system "l ",ROOT,"/core/db_writer.q";
+system "l ",ROOT,"/core/csv_loader.q";
+system "l ",ROOT,"/core/ingestion_log.q";
+
+/ Lib
+system "l ",ROOT,"/lib/catalog.q";
+system "l ",ROOT,"/lib/filters.q";
+system "l ",ROOT,"/lib/dates.q";
+
+/ Set DB path and load ingestion log history
+.dbWriter.setDbPath[hsym `$argDbPath];
+.ingestionLog.reload[hsym `$argDbPath];
+
+/ Auto-discover and load apps from apps/ directory
+appRoot:hsym `$ROOT,"/apps";
+appList:@[{x where not null x}; key appRoot; {[e] `symbol$()}];
+{[r; app]
+  catFile:   r,"/apps/",string[app],"/config/catalog_",string[app],".csv";
+  catFile2:  r,"/config/catalog_",string[app],".csv";
+  refreshFile:r,"/apps/",string[app],"/core/data_refresh.q";
+  configFile: r,"/apps/",string[app],"/core/config.q";
+
+  / Load catalog (try app-local path first, then top-level config/)
+  catPath:$[not () ~ @[key; hsym `$catFile; {[e] ()}]; catFile;
+            not () ~ @[key; hsym `$catFile2; {[e] ()}]; catFile2; ""];
+  if[0 < count catPath;
+    show "  Loading catalog: ",string app;
+    .[.catalog.load; (catPath; `$string app); {[e] show "  [WARN] catalog load failed: ",e}]];
+
+  / Load data_refresh (defines the app's refresh function)
+  if[not () ~ @[key; hsym `$refreshFile; {[e] ()}];
+    show "  Loading data_refresh: ",string app;
+    @[system; "l ",refreshFile; {[e] show "  [WARN] data_refresh failed: ",e}]];
+
+  / Load config (registers sources + app with orchestrator)
+  if[not () ~ @[key; hsym `$configFile; {[e] ()}];
+    show "  Loading config: ",string app;
+    @[system; "l ",configFile; {[e] show "  [WARN] config failed: ",e}]];
+ }[ROOT] each appList;
+
+show "";
+show "========================================";
+show "Orchestrator ready";
+show "  DB:      ",argDbPath;
+show "  CSV:     ",argCsvPath;
+show "  Apps:    ",", " sv string key .orchestrator.appRegistry;
+show "  Sources: ",string count .orchestrator.source_config;
+show "========================================";
+show "";
+
+/ Wire timer then run one immediate tick
+.z.ts:{.orchestrator.orchestratorRun[]};
+system "t ",string .orchestrator.timerInterval;
+show "Orchestrator started. Interval: ",string[.orchestrator.timerInterval],"ms";
+show "Running initial scan...";
+.orchestrator.orchestratorRun[];
