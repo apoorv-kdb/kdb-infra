@@ -62,6 +62,22 @@ const MOCK_PRESETS: SalesPreset[] = [
       ],
     },
   },
+  // ── Overflow test presets (same params, just testing scroll behaviour) ──────
+  { id: 'preset-4',  name: 'Shared View A',  group: 'Shared', isDefault: false, order: 3,  state: { filters: [], exclusions: [], measure: 'total_revenue', fieldConfigs: [{ field: 'region', showTable: true, showChart: true }] } },
+  { id: 'preset-5',  name: 'Shared View B',  group: 'Shared', isDefault: false, order: 4,  state: { filters: [], exclusions: [], measure: 'total_revenue', fieldConfigs: [{ field: 'region', showTable: true, showChart: true }] } },
+  { id: 'preset-6',  name: 'Shared View C',  group: 'Shared', isDefault: false, order: 5,  state: { filters: [], exclusions: [], measure: 'total_revenue', fieldConfigs: [{ field: 'region', showTable: true, showChart: true }] } },
+  { id: 'preset-7',  name: 'Shared View D',  group: 'Shared', isDefault: false, order: 6,  state: { filters: [], exclusions: [], measure: 'total_revenue', fieldConfigs: [{ field: 'region', showTable: true, showChart: true }] } },
+  { id: 'preset-8',  name: 'Shared View E',  group: 'Shared', isDefault: false, order: 7,  state: { filters: [], exclusions: [], measure: 'total_revenue', fieldConfigs: [{ field: 'region', showTable: true, showChart: true }] } },
+  { id: 'preset-9',  name: 'Shared View F',  group: 'Shared', isDefault: false, order: 8,  state: { filters: [], exclusions: [], measure: 'total_revenue', fieldConfigs: [{ field: 'region', showTable: true, showChart: true }] } },
+  { id: 'preset-10', name: 'Shared View G',  group: 'Shared', isDefault: false, order: 9,  state: { filters: [], exclusions: [], measure: 'total_revenue', fieldConfigs: [{ field: 'region', showTable: true, showChart: true }] } },
+  { id: 'preset-11', name: 'Shared View H',  group: 'Shared', isDefault: false, order: 10, state: { filters: [], exclusions: [], measure: 'total_revenue', fieldConfigs: [{ field: 'region', showTable: true, showChart: true }] } },
+  { id: 'preset-12', name: 'Shared View I',  group: 'Shared', isDefault: false, order: 11, state: { filters: [], exclusions: [], measure: 'total_revenue', fieldConfigs: [{ field: 'region', showTable: true, showChart: true }] } },
+  { id: 'preset-13', name: 'Shared View J',  group: 'Shared', isDefault: false, order: 12, state: { filters: [], exclusions: [], measure: 'total_revenue', fieldConfigs: [{ field: 'region', showTable: true, showChart: true }] } },
+  { id: 'preset-14', name: 'Shared View K',  group: 'Shared', isDefault: false, order: 13, state: { filters: [], exclusions: [], measure: 'total_revenue', fieldConfigs: [{ field: 'region', showTable: true, showChart: true }] } },
+  { id: 'preset-15', name: 'Shared View L',  group: 'Shared', isDefault: false, order: 14, state: { filters: [], exclusions: [], measure: 'total_revenue', fieldConfigs: [{ field: 'region', showTable: true, showChart: true }] } },
+  { id: 'preset-16', name: 'Shared View M',  group: 'Shared', isDefault: false, order: 15, state: { filters: [], exclusions: [], measure: 'total_revenue', fieldConfigs: [{ field: 'region', showTable: true, showChart: true }] } },
+  { id: 'preset-17', name: 'Shared View N',  group: 'Shared', isDefault: false, order: 16, state: { filters: [], exclusions: [], measure: 'total_revenue', fieldConfigs: [{ field: 'region', showTable: true, showChart: true }] } },
+  { id: 'preset-18', name: 'Shared View O',  group: 'Shared', isDefault: false, order: 17, state: { filters: [], exclusions: [], measure: 'total_revenue', fieldConfigs: [{ field: 'region', showTable: true, showChart: true }] } },
 ];
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
