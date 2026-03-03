@@ -5,7 +5,7 @@ import { Preset } from '../../types';
 import PresetSaveModal from '../shared/PresetSaveModal/PresetSaveModal';
 import './PresetBar.scss';
 
-const VISIBLE_COUNT = 5;
+const VISIBLE_COUNT = 10;
 
 interface PresetBarProps {
   presets:        Preset<unknown>[];
