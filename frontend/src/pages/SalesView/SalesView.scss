@@ -1,0 +1,32 @@
+@use '../../styles/variables' as *;
+
+.sales-view__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  font-family: $font-data;
+  font-size: $font-size-sm;
+  color: var(--color-text-muted);
+}
+
+// Page-specific sidebar sections
+.sales-sidebar__section {
+  padding: 0 $space-md $space-md;
+  border-bottom: 1px solid var(--color-border);
+
+  &--fields {
+    border-bottom: none;
+  }
+}
+
+.sales-sidebar__label {
+  font-family: $font-data;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: $space-sm;
+  padding-top: $space-sm;
+}

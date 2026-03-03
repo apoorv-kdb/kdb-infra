@@ -1,0 +1,38 @@
+@use '../../styles/variables' as *;
+
+.applied-bar {
+  display: flex;
+  align-items: center;
+  gap: $space-md;
+  padding: 0 $space-lg;
+  min-height: 32px;
+  flex-wrap: wrap;
+}
+
+.applied-bar__group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.applied-bar__group-label {
+  font-family: $font-data;
+  font-size: $font-size-xs;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-command-text-muted);
+}
+
+.applied-bar__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: var(--color-command-chip-bg);
+  border: 1px solid var(--color-command-chip-border);
+  border-radius: $border-radius-pill;
+  font-family: $font-data;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  color: var(--color-command-text);
+  letter-spacing: 0.04em;
+}

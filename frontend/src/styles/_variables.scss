@@ -1,0 +1,140 @@
+// Design system — Clean Slate (Refined)
+// Fonts: Plus Jakarta Sans (UI) + IBM Plex Mono (data)
+
+// ── Raw palette ───────────────────────────────────────────────────────────
+$slate-50:  #F8FAFC;
+$slate-100: #F1F5F9;
+$slate-150: #E8EDF4;
+$slate-200: #E2E6ED;
+$slate-300: #C8CDD8;
+$slate-400: #8A96A8;
+$slate-500: #4A5568;
+$slate-600: #344767;
+$slate-700: #2D3E5A;
+$slate-900: #1E2A3D;
+
+$blue-50:   #EEF3FF;
+$blue-100:  #DBEAFE;
+$blue-200:  #C7D9FC;
+$blue-300:  #93C5FD;
+$blue-400:  #A5B4FC;
+$blue-600:  #2563EB;
+$blue-700:  #1D4ED8;
+$blue-800:  #1E40AF;
+$blue-900:  #1D3A7A;
+
+$teal-600:  #0F766E;
+$teal-700:  #0D6460;
+
+$green-600: #059669;
+$green-700: #047857;
+
+$red-600:   #DC2626;
+$red-700:   #B91C1C;
+
+$amber-50:  #FFFBEB;
+$amber-200: #FDE68A;
+$amber-600: #B45309;
+$amber-700: #92400E;
+
+// ── CSS Custom Properties ─────────────────────────────────────────────────
+:root {
+  // Backgrounds
+  --color-bg-app:       #{$slate-50};
+  --color-bg-surface:   #FFFFFF;
+  --color-bg-sidebar:   #{$slate-50};
+  --color-bg-elevated:  #{$slate-100};
+  --color-bg-input:     #{$slate-100};
+  --color-bg-control:   #{$slate-150};
+
+  // Borders
+  --color-border:       #{$slate-200};
+  --color-border-light: #{$slate-300};
+  --color-border-focus: #{$blue-600};
+
+  // Text
+  --color-text-primary:   #{$slate-900};
+  --color-text-secondary: #{$slate-500};
+  --color-text-muted:     #{$slate-400};
+  --color-text-inverse:   #FFFFFF;
+
+  // Accent
+  --color-accent:          #{$blue-600};
+  --color-accent-dark:     #{$blue-700};
+  --color-accent-dim:      #{$blue-50};
+  --color-accent-dim-border: #{$blue-200};
+  --color-accent-shadow:   rgba(37, 99, 235, 0.22);
+  --color-primary:          #{$blue-600};  // alias for components using old token
+
+  // Semantic
+  --color-positive:        #{$green-600};
+  --color-positive-bg:     rgba(5, 150, 105, 0.07);
+  --color-negative:        #{$red-600};
+  --color-negative-bg:     rgba(220, 38, 38, 0.07);
+  --color-warning-bg:      #{$amber-50};
+  --color-warning-text:    #{$amber-600};
+  --color-warning-border:  #{$amber-200};
+
+  // Table header groups (D2 scheme)
+  --color-th-dim-bg:      #{$blue-100};
+  --color-th-dim-text:    #{$blue-800};
+  --color-th-dim-border:  #{$blue-300};
+  --color-th-val-bg:      #{$slate-100};
+  --color-th-val-text:    #{$slate-500};
+  --color-th-val-border:  #{$slate-300};
+  --color-th-delta-bg:    #{$blue-50};
+  --color-th-delta-text:  #{$blue-700};
+  --color-th-delta-border: #{$blue-400};
+
+  // Card accent bars
+  --color-card-table: #{$blue-600};
+  --color-card-spot:  #{$teal-600};
+  --color-card-chart: #{$amber-600};
+
+  // Shadows
+  --shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.07);
+  --shadow-md:  0 2px 8px rgba(0, 0, 0, 0.09);
+  --shadow-lg:  0 4px 16px rgba(0, 0, 0, 0.10);
+
+  // Sidebar — slightly darker than dashboard white
+  --color-bg-sidebar: #{$slate-100};
+
+  // Command zone (PresetBar + AppliedParamsBar)
+  --color-bg-command-zone:     #{$slate-700};
+  --color-command-divider:     rgba(255,255,255,0.10);
+  --color-command-text:        rgba(255,255,255,0.88);
+  --color-command-text-muted:  rgba(255,255,255,0.42);
+  --color-command-chip-bg:     rgba(255,255,255,0.09);
+  --color-command-chip-border: rgba(255,255,255,0.15);
+}
+
+// ── Typography ────────────────────────────────────────────────────────────
+$font-ui:   'Plus Jakarta Sans', system-ui, sans-serif;
+$font-data: 'IBM Plex Mono', 'Courier New', monospace;
+
+$font-size-xs:   10px;
+$font-size-sm:   11px;
+$font-size-base: 12px;
+$font-size-md:   13px;
+$font-size-lg:   15px;
+$font-size-xl:   18px;
+
+$font-weight-normal:   400;
+$font-weight-medium:   500;
+$font-weight-semibold: 600;
+$font-weight-bold:     700;
+$font-weight-extrabold: 800;
+
+// ── Spacing ───────────────────────────────────────────────────────────────
+$space-xs: 4px;
+$space-sm: 8px;
+$space-md: 16px;
+$space-lg: 24px;
+$space-xl: 32px;
+
+// ── Misc ──────────────────────────────────────────────────────────────────
+$border-radius-sm:   2px;
+$border-radius-md:   4px;
+$border-radius-lg:   8px;
+$border-radius-pill: 999px;
+$card-accent-width:  3px;

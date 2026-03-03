@@ -1,0 +1,32 @@
+@use '../../../styles/variables' as *;
+
+.region-grid {
+  width: 100%;
+
+  &__loading,
+  &__empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 160px;
+    color: var(--color-text-muted);
+    font-family: $font-data;
+    font-size: $font-size-sm;
+    letter-spacing: 0.05em;
+  }
+
+  .ag-root-wrapper { border: none; border-radius: 0; }
+
+  // Cell value classes
+  .cell-positive {
+    color: var(--color-positive) !important;
+    background: var(--color-positive-bg) !important;
+    font-weight: $font-weight-medium;
+  }
+  .cell-negative {
+    color: var(--color-negative) !important;
+    background: var(--color-negative-bg) !important;
+    font-weight: $font-weight-medium;
+  }
+  .cell-neutral { color: var(--color-text-secondary); }
+}

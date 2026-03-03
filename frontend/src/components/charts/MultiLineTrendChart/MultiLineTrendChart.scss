@@ -1,0 +1,18 @@
+@use '../../../styles/variables' as *;
+
+.trend-chart {
+  width: 100%;
+  padding: $space-md;
+
+  &__loading,
+  &__empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--color-text-muted);
+    font-family: $font-data;
+    font-size: $font-size-sm;
+    letter-spacing: 0.05em;
+  }
+}

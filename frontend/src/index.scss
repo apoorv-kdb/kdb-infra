@@ -1,0 +1,54 @@
+@use 'styles/variables' as *;
+@use 'styles/reset';
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-family: $font-ui;
+  font-size: $font-size-base;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+// Scrollbar
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bg-app); }
+::-webkit-scrollbar-thumb {
+  background: var(--color-border-light);
+  border-radius: 3px;
+  &:hover { background: var(--color-border-focus); }
+}
+
+// AG Grid — light theme overrides
+.ag-theme-alpine {
+  --ag-background-color:              var(--color-bg-surface);
+  --ag-foreground-color:              var(--color-text-primary);
+  --ag-header-background-color:       var(--color-bg-elevated);
+  --ag-header-foreground-color:       var(--color-text-secondary);
+  --ag-odd-row-background-color:      var(--color-bg-surface);
+  --ag-row-hover-color:               #{$slate-50};
+  --ag-selected-row-background-color: #{$blue-50};
+  --ag-border-color:                  var(--color-border);
+  --ag-cell-horizontal-border:        none;
+  --ag-font-family:                   #{$font-data};
+  --ag-font-size:                     11px;
+  --ag-header-height:                 36px;
+  --ag-row-height:                    32px;
+  --ag-cell-horizontal-padding:       12px;
+  --ag-range-selection-border-color:  #{$blue-600};
+
+  // Header group colouring applied via cellClass in TSX
+  .ag-header-cell { font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; }
+  .ag-header-cell.th-dim   { background: var(--color-th-dim-bg);   color: var(--color-th-dim-text);   border-bottom: 2px solid var(--color-th-dim-border) !important; }
+  .ag-header-cell.th-val   { background: var(--color-th-val-bg);   color: var(--color-th-val-text);   border-bottom: 2px solid var(--color-th-val-border) !important; }
+  .ag-header-cell.th-delta { background: var(--color-th-delta-bg); color: var(--color-th-delta-text); border-bottom: 2px solid var(--color-th-delta-border) !important; }
+}

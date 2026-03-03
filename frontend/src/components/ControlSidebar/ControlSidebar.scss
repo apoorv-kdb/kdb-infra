@@ -1,0 +1,214 @@
+@use '../../styles/variables' as *;
+
+$sidebar-width:           220px;
+$sidebar-collapsed-width: 40px;
+
+.ctrl-sidebar {
+  width: $sidebar-width;
+  flex-shrink: 0;
+  background: var(--color-bg-sidebar);
+  box-shadow: 2px 0 6px rgba(0,0,0,0.07);
+  border-right: none;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: width 0.2s ease;
+  overflow: visible;
+  z-index: 10;
+
+  &--collapsed {
+    width: $sidebar-collapsed-width;
+    // Don't clip the toggle button — it sits outside the sidebar bounds
+    overflow: visible;
+  }
+}
+
+.ctrl-sidebar__toggle {
+  position: absolute;
+  top: $space-md;
+  right: -12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 9px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.15s;
+
+  &:hover {
+    background: var(--color-accent-dim);
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+}
+
+.ctrl-sidebar__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: $space-md 0;
+}
+
+.ctrl-sidebar__section {
+  padding: 0 $space-md $space-md;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: $space-xs;
+  &:last-of-type { border-bottom: none; }
+}
+
+.ctrl-sidebar__section-label {
+  font-family: $font-data;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-semibold;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: $space-sm;
+  padding-top: $space-sm;
+}
+
+.ctrl-sidebar__section-body { display: flex; flex-direction: column; gap: $space-sm; }
+
+// Mode Toggle
+.ctrl-sidebar__mode-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--color-border);
+  border-radius: $border-radius-md;
+  overflow: hidden;
+  background: var(--color-bg-elevated);
+}
+
+.ctrl-sidebar__mode-btn {
+  padding: 6px 0;
+  font-family: $font-ui;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+
+  &:hover { background: var(--color-bg-control); color: var(--color-text-secondary); }
+
+  &--active {
+    background: var(--color-accent-dim);
+    color: var(--color-accent);
+    font-weight: $font-weight-semibold;
+  }
+}
+
+// Date row — always stacked vertically
+.ctrl-sidebar__row--two,
+.ctrl-sidebar__row--one {
+  display: flex;
+  flex-direction: column;
+  gap: $space-sm;
+}
+
+.ctrl-sidebar__date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ctrl-sidebar__date-label {
+  font-family: $font-data;
+  font-size: $font-size-xs;
+  letter-spacing: 0.1em;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+}
+
+.ctrl-sidebar__date-input {
+  width: 100%;
+  padding: 5px 6px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: $border-radius-md;
+  color: var(--color-text-primary);
+  font-family: $font-data;
+  font-size: $font-size-xs;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+
+  &:focus { border-color: var(--color-border-focus); }
+}
+
+// Window options
+.ctrl-sidebar__window-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+.ctrl-sidebar__window-btn {
+  padding: 5px 0;
+  font-family: $font-data;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  color: var(--color-text-muted);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: $border-radius-md;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+
+  &:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+  &--active {
+    background: var(--color-accent-dim);
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    font-weight: $font-weight-semibold;
+  }
+}
+
+// Page-specific controls slot
+.ctrl-sidebar__page-controls {
+  display: flex;
+  flex-direction: column;
+}
+
+.ctrl-sidebar__spacer { flex: 1; min-height: $space-md; }
+
+// Apply button
+.ctrl-sidebar__apply-btn {
+  margin: 0 $space-md $space-md;
+  padding: 9px $space-md;
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
+  border: none;
+  border-radius: $border-radius-lg;
+  font-family: $font-ui;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-bold;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $space-sm;
+  box-shadow: 0 2px 10px var(--color-accent-shadow);
+  transition: opacity 0.15s, box-shadow 0.15s;
+
+  &:hover {
+    opacity: 0.9;
+    box-shadow: 0 4px 16px var(--color-accent-shadow);
+  }
+}
