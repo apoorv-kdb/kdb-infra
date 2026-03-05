@@ -4,9 +4,48 @@ Integration reference for consumers of the app server q functions. All functions
 
 ---
 
+
+## Init
+
+### `GET /api/sales/init`
+
+Single call the frontend makes on page load. Returns everything needed to render the page.
+
+**Arguments:** none
+
+**Returns:**
+
+```json
+{
+  "latestAsofDate":  "2026-02-26",
+  "defaultPrevDate": "2026-01-27",
+  "catalogFields":   [...],
+  "filterOptions":   [...],
+  "presets":         []
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `latestAsofDate` | Most recent partition date in the HDB — use as default asofDate |
+| `defaultPrevDate` | 30 days prior to latestAsofDate — use as default prevDate |
+| `catalogFields` | Same as `/api/sales/catalog/fields` |
+| `filterOptions` | Same as `/api/sales/catalog/filter-options` |
+| `presets` | Always `[]` for now — preset persistence not yet implemented |
+
+---
+
+## Route Prefix
+
+All routes are prefixed `/api/sales/`. This namespaces the sales app and follows the pattern for future apps (`/api/risk/`, `/api/pnl/`, etc.).
+
+---
+
 ## Catalog Functions
 
 ### `.catHandler.fields[]`
+
+**Route:** `GET /api/sales/catalog/fields`
 
 Returns enabled fields for the app with display metadata.
 
@@ -37,6 +76,8 @@ total_revenue  Total Revenue  currency  value
 
 ### `.catHandler.filterOptions[]`
 
+**Route:** `GET /api/sales/catalog/filter-options`
+
 Returns all distinct values for categorical fields. Used to populate filter UI dropdowns.
 
 **Arguments:** none
@@ -62,7 +103,9 @@ region  EMEA
 
 ## Query Handlers
 
-### `.qryHandler.table` — Movement (DoD Comparison)
+### `.qryHandler.table`
+
+**Route:** `POST /api/sales/query/table` — Movement (DoD Comparison)
 
 Compares two dates for a categorical field against a numeric measure. Returns absolute change and change %.
 
@@ -111,7 +154,9 @@ params:`field`measure`asofDate`prevDate`filters`exclusions!(
 
 ---
 
-### `.qryHandler.spot` — Spot (Single Date Snapshot)
+### `.qryHandler.spot`
+
+**Route:** `POST /api/sales/query/spot` — Spot (Single Date Snapshot)
 
 Single date breakdown with absolute value and composition percentage.
 
@@ -149,7 +194,9 @@ region  value     pct
 
 ---
 
-### `.qryHandler.trend` — Trend (Time Series)
+### `.qryHandler.trend`
+
+**Route:** `POST /api/sales/query/trend` — Trend (Time Series)
 
 Time series over a date window, broken down by a categorical field.
 

@@ -9,7 +9,7 @@ system "l ",ROOT,"/server/server_init.q";
 loadDomainConfigs[`sales];
 
 / ============================================================================
-/ APP-SPECIFIC MODULES (explicit opt-in)
+/ APP-SPECIFIC MODULES
 / ============================================================================
 
 system "l ",ROOT,"/lib/cat_handlers.q";
@@ -32,14 +32,20 @@ opts:.Q.opt .z.x;
 .cache.startRefresh[600000];
 
 / ============================================================================
-/ HTTP ROUTES
+/ HTTP ROUTES — all prefixed /api/sales/
 / ============================================================================
 
-.http.addRoute[`GET;  "/catalog/fields";        .catHandler.fields];
-.http.addRoute[`GET;  "/catalog/filter-options"; .catHandler.filterOptions];
-.http.addRoute[`POST; "/query/table";            .qryHandler.table];
-.http.addRoute[`POST; "/query/spot";             .qryHandler.spot];
-.http.addRoute[`POST; "/query/trend";            .qryHandler.trend];
+/ Init — unified startup response (latestAsofDate, catalogFields, filterOptions, presets)
+.http.addRoute[`GET;  "/api/sales/init";          .catHandler.init];
+
+/ Catalog (also available standalone for debugging)
+.http.addRoute[`GET;  "/api/sales/catalog/fields";         .catHandler.fields];
+.http.addRoute[`GET;  "/api/sales/catalog/filter-options"; .catHandler.filterOptions];
+
+/ Query handlers
+.http.addRoute[`POST; "/api/sales/query/table"; .qryHandler.table];
+.http.addRoute[`POST; "/api/sales/query/spot";  .qryHandler.spot];
+.http.addRoute[`POST; "/api/sales/query/trend"; .qryHandler.trend];
 
 / ============================================================================
 / STARTUP SUMMARY
@@ -51,10 +57,11 @@ show "Sales server ready";
 show "  DB:      ",string .dbWriter.dbPath;
 show "  Catalog: ",.srv.catPath;
 show "  Routes:";
-show "    GET  /catalog/fields";
-show "    GET  /catalog/filter-options";
-show "    POST /query/table";
-show "    POST /query/spot";
-show "    POST /query/trend";
+show "    GET  /api/sales/init";
+show "    GET  /api/sales/catalog/fields";
+show "    GET  /api/sales/catalog/filter-options";
+show "    POST /api/sales/query/table";
+show "    POST /api/sales/query/spot";
+show "    POST /api/sales/query/trend";
 show "========================================";
 show "";
