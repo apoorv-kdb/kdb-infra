@@ -121,7 +121,10 @@
   present:expected where expected in cols tbl;
   {[tbl; tblName; col]
     vals:tbl col;
-    n:$[11h=type vals; sum vals=`; 10h=type vals; sum vals=""; sum null vals];
+    n:$[11h=type vals; sum vals=`;
+      10h=type vals; sum vals="";
+      0h=type vals;  0;
+      sum null vals];
     if[n>0; show "  [WARN] ",string[col]," has ",string[n]," nulls (",string[tblName],")"]
   }[tbl; tblName] each present;
 
@@ -175,6 +178,7 @@
             `];
         ] each tbl col];
       t = `timestamp; "P"$tbl col;
+      t = `string;     tbl col;
       tbl col
     ];
     tbl

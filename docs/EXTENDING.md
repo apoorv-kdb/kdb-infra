@@ -276,3 +276,112 @@ Wired into `.z.pg` / `.z.po` at connection time for access control. One function
 4. Expose `.presets.forUser` via framework
 
 Estimated effort: 2-3 days. LDAP integration is the main variable.
+
+---
+
+## Troubleshooting a Data Refresh
+
+The orchestrator is just a scheduler. Everything meaningful happens in `data_refresh.q`. You can test your refresh function completely independently of the orchestrator — and you should, before letting the orchestrator call it.
+
+### Step 1 — Check the ingestion log
+
+After a tick, check what happened:
+
+```q
+/ See all entries
+.ingestionLog.tbl
+
+/ See only failures
+select from .ingestionLog.tbl where status=`failed
+```
+
+If entries are in `failed` status, reset them before retrying — otherwise the orchestrator will skip them as already processed:
+
+```q
+/ Reset one date
+.orchestrator.resetSource[`your_source; 2026.01.27]
+
+/ Reset all failed dates
+failed:exec distinct date from .ingestionLog.tbl where status=`failed;
+.orchestrator.resetSource[`your_source;] each failed
+```
+
+---
+
+### Step 2 — Call the refresh function directly
+
+Pull the filepath from the ingestion log and call your refresh function manually. This bypasses all orchestrator wrapping and gives you the full q error with file and line number:
+
+```q
+/ Get a failed entry
+r:first select from .ingestionLog.tbl where status=`failed
+
+/ Build sourceMap
+sm:(enlist r`source)!enlist r`filepath
+
+/ Call refresh directly — full error visible here
+.yourApp.refresh[r`date; sm]
+```
+
+---
+
+### Step 3 — Test each step in isolation
+
+If the refresh function errors, test each step individually:
+
+```q
+/ Test CSV load
+txns:.csv.loadCSV[`your_raw_table; `yourapp; sm`your_raw_table; ","]
+count txns
+cols txns
+meta txns
+
+/ Test catalog validation
+vr:.catalog.validate[`your_raw_table; txns; `yourapp]
+vr`valid
+vr`errors
+
+/ Test aggregation (paste your aggregation logic directly)
+agg:0! select total_x:sum x by date, dim from txns
+count agg
+
+/ Test write for one date
+d:first asc distinct agg`date
+.dbWriter.writeMultiple[`your_summary!enlist select from agg where date=d; d]
+```
+
+---
+
+### Common Causes of `REFRESH_ERROR:length`
+
+- **Embedded commas in CSV fields** — `csv_loader.q` handles quoted fields (e.g. `"Smith, John"`). Unquoted commas in fields are ambiguous and cannot be parsed — fix at source or use a different delimiter.
+- **Column count mismatch** — header has N columns but a data row has N+1 or N-1. Check `count "," vs each read0 fp` to find the offending rows.
+- **Trailing slash in csvDir** — if `csvDir` ends with `/`, file paths get a double slash. Strip it in `config.q`: `csvDir:$[last[csvDir]="/"; -1_csvDir; csvDir]`.
+- **Empty aggregation** — if the CSV loads but has no rows matching the date filter, the aggregation returns empty and downstream writes fail. Check `count txns` after load.
+
+---
+
+## Notes on Catalog Design
+
+### Skipping the catalog for clean sources
+
+If your source CSV already uses clean, consistent column names matching your canonical field names, you don't need to catalog the raw table. Load directly in `data_refresh.q`:
+
+```q
+/ Load with explicit type string — no catalog involvement
+raw:("DSSFF"; enlist ",") 0: sources`your_source;
+
+/ Validate manually
+missing:`date`desk`revenue where not (`date`desk`revenue) in cols raw;
+if[count missing; .ingestionLog.markFailed[`your_source; dt; "Missing: ",", " sv string missing]; :()];
+
+/ Aggregate and write as normal
+```
+
+Only catalog the aggregated output table (`enabled=1`). The raw source never touches the catalog.
+
+### Derived table catalog is currently manual
+
+Today you write catalog entries for both the raw source table and the aggregated output table. The derived table entries are boilerplate — the field names, types, and roles are implied by the aggregation logic in `data_refresh.q`.
+
+This is a known limitation. A future improvement will infer or scaffold the derived table catalog from the raw source catalog and aggregation declarations, so developers only need to fill in `label` and `format`. For now: copy field names from your aggregation, set `enabled=1`, inherit types from the corresponding raw fields.

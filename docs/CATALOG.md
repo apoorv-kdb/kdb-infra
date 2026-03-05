@@ -41,6 +41,7 @@ One catalog file per application. The app name in the filename must match the `a
 | `int` | `"I"$col` | Smaller integers where long is wasteful |
 | `date` | `"D"$col` | Date columns (expects `YYYY-MM-DD` or `YYYY.MM.DD`) |
 | `timestamp` | `"P"$col` | Datetime columns |
+| `string` | pass-through | Free-text fields — already loaded as strings, no cast applied |
 
 ---
 

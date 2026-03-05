@@ -218,6 +218,19 @@ Note: if using a data pump framework instead of HTTP, this is irrelevant — pas
 
 ---
 
+
+---
+
+**Symptom:** `File not found` error despite file existing
+
+A double slash in the filepath (`C:/data/csv//filename.csv`) means `csvDir` in `config.q` has a trailing `/`. Strip it:
+
+```q
+csvDir:$[last[csvDir]="/"; -1_csvDir; csvDir]
+```
+
+Add this line immediately after `csvDir` is set in `config.q`.
+
 **Symptom:** `'Not cached: sales_by_region`
 
 The cache registration or load failed. Check:
