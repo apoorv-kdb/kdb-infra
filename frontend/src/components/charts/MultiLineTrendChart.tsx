@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react';
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
-import { TrendByDimensionPoint } from '../../../types';
+import { TrendByDimensionPoint } from '../../types';
 import './MultiLineTrendChart.scss';
 
 interface MultiLineTrendChartProps {

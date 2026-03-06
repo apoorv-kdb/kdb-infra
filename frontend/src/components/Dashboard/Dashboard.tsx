@@ -3,9 +3,9 @@ import {
   QueryParams, FlatRow, SpotRow,
   TableColumnConfig, TrendByDimensionPoint, CatalogField,
 } from '../../types';
-import RegionSummaryGrid from '../grids/RegionSummaryGrid/RegionSummaryGrid';
-import MultiLineTrendChart from '../charts/MultiLineTrendChart/MultiLineTrendChart';
-import SpotBarChart from '../charts/SpotBarChart/SpotBarChart';
+import RegionSummaryGrid from '../grids/RegionSummaryGrid';
+import MultiLineTrendChart from '../charts/MultiLineTrendChart';
+import SpotBarChart from '../charts/SpotBarChart';
 import './Dashboard.scss';
 
 interface DashboardProps {

@@ -7,7 +7,7 @@ import ControlSidebar from '../../components/ControlSidebar/ControlSidebar';
 import PresetBar from '../../components/PresetBar/PresetBar';
 import AppliedParamsBar from '../../components/AppliedParamsBar/AppliedParamsBar';
 import Dashboard from '../../components/Dashboard/Dashboard';
-import KVDropdown from '../../components/shared/KVDropdown/KVDropdown';
+import KVDropdown from '../../components/shared/KVDropdown';
 import FieldPicker from '../../components/FieldPicker/FieldPicker';
 import {
   getInitData, getRegionSummaryFlat, getSpotData, getTrendByDimension,

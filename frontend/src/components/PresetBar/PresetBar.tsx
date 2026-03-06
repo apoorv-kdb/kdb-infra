@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChevronDown, faPlus, faRotateLeft } from '@fortawesome/free-solid-svg-icons';
 import { Preset } from '../../types';
-import PresetSaveModal from '../shared/PresetSaveModal/PresetSaveModal';
+import PresetSaveModal from '../shared/PresetSaveModal';
 import './PresetBar.scss';
 
 const VISIBLE_COUNT = 10;

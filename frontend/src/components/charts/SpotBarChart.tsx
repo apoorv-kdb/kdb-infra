@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react';
 import Highcharts from 'highcharts';
 import HighchartsReact from 'highcharts-react-official';
-import { SpotRow } from '../../../types';
+import { SpotRow } from '../../types';
 import './SpotBarChart.scss';
 
 interface SpotBarChartProps {

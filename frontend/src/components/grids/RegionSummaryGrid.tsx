@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { ColDef, ValueFormatterParams, CellClassParams, CellStyle } from 'ag-grid-community';
-import { FlatRow, TableColumnConfig } from '../../../types';
+import { FlatRow, TableColumnConfig } from '../../types';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import './RegionSummaryGrid.scss';

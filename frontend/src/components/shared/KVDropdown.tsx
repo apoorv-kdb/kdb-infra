@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faChevronDown, faXmark, faSearch } from '@fortawesome/free-solid-svg-icons';
-import { KVOption } from '../../../types';
+import { KVOption } from '../../types';
 import './KVDropdown.scss';
 
 interface KVDropdownProps {
