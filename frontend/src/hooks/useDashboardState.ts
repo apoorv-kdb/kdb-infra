@@ -8,11 +8,6 @@ import { parseFromUrl, pushUrlState } from '../services/urlSerializer';
 // All state logic lives here; page components are composition only.
 // =============================================
 
-export interface DashboardFeatures {
-  comparison: boolean;   // prevDate + mode
-  trend:      boolean;   // chartWindow
-}
-
 export interface InitData<TDeferred> {
   latestAsofDate:  string;
   defaultPrevDate: string;
@@ -28,7 +23,6 @@ interface Options<TImmediate extends BaseImmediateState, TDeferred> {
   setDefaultFn:     (id: string) => Promise<void>;
   defaultImmediate: TImmediate;
   defaultDeferred:  TDeferred;
-  features:         DashboardFeatures;
   urlSync:          boolean;
   buildQueryParams: (immediate: TImmediate, deferred: TDeferred) => QueryParams;
 }
@@ -124,7 +118,6 @@ export function useDashboardState<TImmediate extends BaseImmediateState, TDeferr
         const hasUrlState = Object.keys(urlParams).length > 0 && urlParams.asofDate;
 
         if (hasUrlState) {
-          // Build immediate + draft from URL
           const newImmediate: TImmediate = {
             ...defaultImmediate,
             ...(urlParams.asofDate    && { asofDate:    urlParams.asofDate }),
@@ -134,10 +127,10 @@ export function useDashboardState<TImmediate extends BaseImmediateState, TDeferr
           };
           const newDraft: TDeferred = {
             ...defaultDeferred,
-            ...(urlParams.measure     && { measure:      urlParams.measure }),
+            ...(urlParams.measure      && { measure:      urlParams.measure }),
             ...(urlParams.fieldConfigs && { fieldConfigs: urlParams.fieldConfigs }),
-            ...(urlParams.filters     && { filters:      kvRecordToArray(urlParams.filters) }),
-            ...(urlParams.exclusions  && { exclusions:   kvRecordToArray(urlParams.exclusions) }),
+            ...(urlParams.filters      && { filters:      kvRecordToArray(urlParams.filters) }),
+            ...(urlParams.exclusions   && { exclusions:   kvRecordToArray(urlParams.exclusions) }),
           };
           setImmediateState(newImmediate);
           immediateRef.current = newImmediate;
@@ -145,7 +138,6 @@ export function useDashboardState<TImmediate extends BaseImmediateState, TDeferr
           draftRef.current = newDraft;
           applyState(newImmediate, newDraft);
         } else {
-          // Try default preset
           const defaultPreset = data.presets.find(p => p.isDefault) ?? data.presets[0] ?? null;
           const newImmediate: TImmediate = {
             ...defaultImmediate,
@@ -219,7 +211,6 @@ export function useDashboardState<TImmediate extends BaseImmediateState, TDeferr
   const savePreset = useCallback(async (name: string, group: string) => {
     let currentDraft: TDeferred = defaultDeferred;
     setDraftState(d => { currentDraft = d; return d; });
-    // Give setState a tick to run
     await new Promise(r => setTimeout(r, 0));
     const saved = await savePresetFn(currentDraft, name, group);
     setPresets(prev => [...prev, saved]);

@@ -179,13 +179,12 @@ const state = useDashboardState<RiskImmediateState, RiskDraftState>({
   setDefaultFn:     setDefaultPreset,
   defaultImmediate: DEFAULT_RISK_IMMEDIATE,
   defaultDeferred:  DEFAULT_RISK_DRAFT,
-  features:         { comparison: false, trend: false },
   urlSync:          true,
   buildQueryParams,
 });
 ```
 
-Pass `features: { comparison: false, trend: false }` — this is noted for documentation. The sidebar will only show the ASOF date and Apply button.
+The sidebar opts into features purely through prop presence — pass `prevDate` + `onPrevChange` to enable comparison mode, pass `chartWindow` + `onChartWindowChange` to enable the trend window selector. No hook config needed.
 
 ---
 
@@ -222,12 +221,7 @@ const RiskView = () => {
           // No prevDate, mode, or chartWindow props = no comparison/trend UI
         >
           {/* Page-specific deferred controls */}
-          <SelectDropdown
-            label="Scenario"
-            options={scenarios}
-            value={draft.scenario}
-            onChange={v => setDraft({ scenario: v })}
-          />
+          {/* Page-specific deferred controls go here — e.g. a native <select> or KVDropdown */}
         </ControlSidebar>
       }
     >

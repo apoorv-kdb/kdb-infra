@@ -126,7 +126,7 @@ This is the most complex frontend item — dynamic columns require special AG Gr
 
 **Scope:**
 - New feature bundle `WithDateRange` extending `BaseImmediateState`
-- Date range pickers in `ControlSidebar` (two DatePickers for each period)
+- Date range pickers in `ControlSidebar` (two date inputs for each period — build as new `WithDateRange` sidebar controls)
 - Pages opt in via `features: { dateRange: true }` in `useDashboardState`
 - URL serialisation: `&asof_from=2026-01-01&asof_to=2026-01-31&prev_from=2025-01-01&prev_to=2025-01-31`
 

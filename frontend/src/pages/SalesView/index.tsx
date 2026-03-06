@@ -67,7 +67,6 @@ const SalesView = () => {
     setDefaultFn:     setDefaultPreset,
     defaultImmediate: DEFAULT_SALES_IMMEDIATE,
     defaultDeferred:  DEFAULT_SALES_DRAFT,
-    features:         { comparison: true, trend: true },
     urlSync:          true,
     buildQueryParams,
   });

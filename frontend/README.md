@@ -57,7 +57,6 @@ src/
     useDashboardState.ts  # Core shared state hook — powers every page
   services/
     dataService.ts        # Fetch helpers (used by real service files)
-    mockData.ts           # Static mock data and generators
     urlSerializer.ts      # URL ↔ QueryParams serialization
   components/
     AppShell/             # Layout shell (header, command zone, sidebar slot, main)
@@ -68,7 +67,7 @@ src/
     Dashboard/            # Card grid + data fetching orchestration
     charts/               # Highcharts wrappers
     grids/                # AG Grid wrappers
-    shared/               # KVDropdown, PresetSaveModal, SelectDropdown, etc.
+    shared/               # KVDropdown, PresetSaveModal
   pages/
     SalesView/            # Sales dashboard — the first production page
       index.tsx           # Page composition + wiring

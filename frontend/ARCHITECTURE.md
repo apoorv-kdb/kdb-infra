@@ -140,7 +140,6 @@ const state = useDashboardState<TImmediate, TDeferred>({
   setDefaultFn,        // (id) => Promise<void>
   defaultImmediate,    // TImmediate — used before init loads
   defaultDeferred,     // TDeferred  — used if no preset and no URL
-  features,            // { comparison: bool, trend: bool }
   urlSync,             // whether to write state to URL
   buildQueryParams,    // (TImmediate, TDeferred) => QueryParams
 });
