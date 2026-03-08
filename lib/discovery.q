@@ -5,22 +5,21 @@
 / Two discovery strategies, selected by `dateFrom` column in source config:
 //
 /   dateFrom:`folder
-/     Each subdirectory of csvPath whose name parses as a date is a candidate.
+/     Each subdirectory of `directory` whose name parses as a date is a candidate.
 /     Files matching filePattern inside that subdir are the work items.
 /     Subdir names are parsed using dateFormat.
 //
 /   dateFrom:`filename
-/     Files matching filePattern directly inside csvPath are candidates.
+/     Files matching filePattern directly inside `directory` are candidates.
 /     Each filename is stripped of its extension, split by dateDelim,
 /     and every token is tested against dateFormat. First valid parse wins.
 //
-/ Supported dateFormat values: `yyyymmdd  `yyyy.mm.dd  `yyyy-mm-dd
+/ Supported dateFormat values: yyyymmdd  yyyy.mm.dd  yyyy-mm-dd
 //
 / Entry point:
-/   .discovery.identifyWork[sourceConfig; csvPath]
-/     sourceConfig — table: source, refreshUnit, filePattern, dateFrom,
-/                            dateFormat, dateDelim, delimiter, required
-/     csvPath      — hsym pointing to base CSV directory
+/   .discovery.identifyWork[sourceConfig]
+/     sourceConfig - table: source, refreshUnit, filePattern, dateFrom,
+/                           dateFormat, dateDelim, delimiter, required, directory
 /     Returns table: source, refreshUnit, date, filepath
 
 / ============================================================================
@@ -69,17 +68,15 @@
 / FOLDER-BASED DISCOVERY
 / ============================================================================
 
-/ Scan csvPath for subdirectories whose names parse as dates,
-/ then collect files matching filePattern inside each dated subdir.
-.discovery.scanFolder:{[src; ru; fmt; pattern; csvPath]
-  entries:@[key; csvPath; {[e] `symbol$()}];
+.discovery.scanFolder:{[src; ru; fmt; pattern; dir]
+  entries:@[key; dir; {[e] `symbol$()}];
   if[0=count entries;
-    :( [] source:`symbol$(); refreshUnit:`symbol$(); date:`date$(); filepath:`symbol$())];
+    :([] source:`symbol$(); refreshUnit:`symbol$(); date:`date$(); filepath:`symbol$())];
   result:([] source:`symbol$(); refreshUnit:`symbol$(); date:`date$(); filepath:`symbol$());
-  {[result; src; ru; fmt; pattern; csvPath; entry]
+  {[result; src; ru; fmt; pattern; dir; entry]
     dt:.discovery.parseToken[fmt; string entry];
     if[null dt; :result];
-    subdir:` sv csvPath,entry;
+    subdir:` sv dir,entry;
     files:@[key; subdir; {[e] `symbol$()}];
     matched:files where files like string pattern;
     if[0=count matched; :result];
@@ -89,26 +86,25 @@
       date:       (count matched)#enlist dt;
       filepath:   {` sv (x;y)}[subdir;] each matched);
     result,newRows
-  }[; src; ru; fmt; pattern; csvPath]/[result; entries]
+  }[; src; ru; fmt; pattern; dir]/[result; entries]
  }
 
 / ============================================================================
 / FILENAME-BASED DISCOVERY
 / ============================================================================
 
-/ Scan csvPath for files matching filePattern, extract dates from filenames.
-.discovery.scanFilenames:{[src; ru; fmt; delim; pattern; csvPath]
-  files:@[key; csvPath; {[e] `symbol$()}];
+.discovery.scanFilenames:{[src; ru; fmt; delim; pattern; dir]
+  files:@[key; dir; {[e] `symbol$()}];
   matched:files where files like string pattern;
   if[0=count matched;
-    :( [] source:`symbol$(); refreshUnit:`symbol$(); date:`date$(); filepath:`symbol$())];
+    :([] source:`symbol$(); refreshUnit:`symbol$(); date:`date$(); filepath:`symbol$())];
   result:([] source:`symbol$(); refreshUnit:`symbol$(); date:`date$(); filepath:`symbol$());
-  {[result; src; ru; fmt; delim; csvPath; fn]
+  {[result; src; ru; fmt; delim; dir; fn]
     dt:.discovery.extractDateFromFilename[fmt; delim; string fn];
     if[null dt; :result];
-    fp:` sv csvPath,fn;
+    fp:` sv dir,fn;
     result,([] source:enlist src; refreshUnit:enlist ru; date:enlist dt; filepath:enlist fp)
-  }[; src; ru; fmt; delim; csvPath]/[result; matched]
+  }[; src; ru; fmt; delim; dir]/[result; matched]
  }
 
 / ============================================================================
@@ -116,29 +112,31 @@
 / ============================================================================
 
 / Scan for all available work items across all sources in sourceConfig.
-/ sourceConfig — table with cols: source, refreshUnit, filePattern,
-/                dateFrom, dateFormat, dateDelim, delimiter, required
-/ csvPath      — hsym to base CSV directory
+/ sourceConfig - table with cols: source, refreshUnit, filePattern,
+/                dateFrom, dateFormat, dateDelim, delimiter, required, directory
 / Returns table: source, refreshUnit, date, filepath
-.discovery.identifyWork:{[sourceConfig; csvPath]
+.discovery.identifyWork:{[sourceConfig]
   result:([] source:`symbol$(); refreshUnit:`symbol$(); date:`date$(); filepath:`symbol$());
   n:count sourceConfig;
   if[0=n; :result];
-  {[result; sourceConfig; csvPath; i]
+  i:0;
+  while[i<n;
     row:sourceConfig i;
-    src:    row`source;
-    ru:     row`refreshUnit;
-    pat:    row`filePattern;
-    frm:    row`dateFrom;
-    fmt:    row`dateFormat;
-    delim:  row`dateDelim;
+    src:  row`source;
+    ru:   row`refreshUnit;
+    pat:  row`filePattern;
+    frm:  row`dateFrom;
+    fmt:  row`dateFormat;
+    delim:row`dateDelim;
+    dir:  hsym row`directory;
     newRows:$[frm=`folder;
-        .discovery.scanFolder[src; ru; fmt; pat; csvPath];
+        .discovery.scanFolder[src; ru; fmt; pat; dir];
         frm=`filename;
-        .discovery.scanFilenames[src; ru; fmt; delim; pat; csvPath];
+        .discovery.scanFilenames[src; ru; fmt; delim; pat; dir];
         ([] source:`symbol$(); refreshUnit:`symbol$(); date:`date$(); filepath:`symbol$())];
-    result,newRows
-  }[; sourceConfig; csvPath]/[result; til n]
+    result,:newRows;
+    i+:1];
+  result
  }
 
 show "  discovery.q loaded"

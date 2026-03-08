@@ -1,9 +1,9 @@
 / lib/query.q
 / Reusable analytical query handlers.
 / Provides two analytical modes:
-/   movement (.qryHandler.table)  — DoD/period comparison, two dates
-/   spot      (.qryHandler.spot)  — single date, absolute values + composition %
-/   trend     (.qryHandler.trend) — time series over a window
+/   movement (.qryHandler.table)  - DoD/period comparison, two dates
+/   spot      (.qryHandler.spot)  - single date, absolute values + composition %
+/   trend     (.qryHandler.trend) - time series over a window
 / Dependencies: catalog.q, cache.q, filters.q
 
 / ============================================================================
@@ -60,7 +60,7 @@
  }
 
 / ============================================================================
-/ MOVEMENT — DoD / period comparison
+/ MOVEMENT - DoD / period comparison
 / POST /query/table
 / Params: field, measure, asofDate, prevDate, filters, exclusions
 / ============================================================================
@@ -105,7 +105,7 @@
  }
 
 / ============================================================================
-/ SPOT — single date, absolute values + composition %
+/ SPOT - single date, absolute values + composition %
 / POST /query/spot
 / Params: field, measure, asofDate, filters, exclusions, topN (optional)
 / ============================================================================
@@ -140,7 +140,7 @@
  }
 
 / ============================================================================
-/ TREND — time series
+/ TREND - time series
 / POST /query/trend
 / Params: categoryField, measure, startDate, endDate, filters, exclusions
 / ============================================================================

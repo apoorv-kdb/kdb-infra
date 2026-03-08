@@ -2,7 +2,7 @@
 / Minimal KDB+ 4.x HTTP routing layer.
 / Routes registered via .http.addRoute.
 / GET  handled by .z.ph
-/ POST handled by .z.pp — KDB+ passes "path {json}" as x[0], headers as x[1]
+/ POST handled by .z.pp - KDB+ passes "path {json}" as x[0], headers as x[1]
 
 .http.routes:()!()
 
@@ -37,10 +37,10 @@
 / KDB+ 4.x passes POST as a 2-element list: x[0] = "path {json body}", x[1] = headers dict
 / Must split x[0] on first space to separate the path from the JSON body.
 / _route is embedded in the JSON body by the frontend for routing.
-/ Note: `_route in KDB+ parses as delete operator — must use `$"_route" instead.
+/ Note: `_route in KDB+ parses as delete operator - must use `$"_route" instead.
 
 .z.pp:{[x]
-  / Extract raw string — first element if list, else use directly
+  / Extract raw string - first element if list, else use directly
   raw:$[0h=type x; x 0; x];
   raw:$[10h=type raw; raw; ""];
 
@@ -48,11 +48,11 @@
   spaceIdx:first where raw=" ";
   body:$[null spaceIdx; ""; (spaceIdx+1)_raw];
 
-  / Parse JSON body — fall back to empty dict on parse failure
+  / Parse JSON body - fall back to empty dict on parse failure
   params:@[.j.k; body; {()!()}];
 
   / Extract route from _route key in body
-  / Cannot use `_route — underscore prefix is the delete operator in q
+  / Cannot use `_route - underscore prefix is the delete operator in q
   routeKey:`$"_route";
   path:$[routeKey in key params; string params routeKey; "/unknown"];
   params _:routeKey;

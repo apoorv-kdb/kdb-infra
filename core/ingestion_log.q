@@ -1,5 +1,5 @@
 / core/ingestion_log.q
-/ Tracks all ingestion activity — refreshUnit, date, status, table counts.
+/ Tracks all ingestion activity - refreshUnit, date, status, table counts.
 / Persisted to partitioned DB at end of each orchestrator tick.
 / Reloaded from DB on startup so state survives restarts.
 / Dependencies: db_writer.q
@@ -83,8 +83,8 @@
   `.ingestionLog.tbl insert (ru; dt; `processing; enlist ""; enlist ""; .z.p; 0Np);
  }
 
-/ tblCounts — dict of tableName(symbol) -> rowCount(long), e.g. `sales_transactions`sales_by_region!1000 950
-/ warnings  — string or list of strings; pass "" or () for none
+/ tblCounts - dict of tableName(symbol) -> rowCount(long), e.g. `sales_transactions`sales_by_region!1000 950
+/ warnings  - string or list of strings; pass "" or () for none
 .ingestionLog.markCompleted:{[ru; dt; tblCounts; warnings]
   tcStr:.ingestionLog.serialiseCounts[tblCounts];
   warnStr:$[(::)~warnings; ""; 0=count warnings; "";

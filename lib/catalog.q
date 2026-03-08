@@ -3,9 +3,9 @@
 /   role:         categorical | value | temporal
 /   type:         symbol | float | long | date | timestamp
 /   format:       currency | integer | percent | date | (empty)
-/   source_field: raw source column name — empty means source already uses canonical name
+/   source_field: raw source column name - empty means source already uses canonical name
 /                 multiple rows per field = multiple accepted source aliases
-/   date_format:  explicit date format for this source_field row — YYYY-MM-DD | YYYYMMDD | DD/MM/YYYY | MM/DD/YYYY
+/   date_format:  explicit date format for this source_field row - YYYY-MM-DD | YYYYMMDD | DD/MM/YYYY | MM/DD/YYYY
 /                 empty means auto-detect (handles YYYY-MM-DD, YYYY.MM.DD, YYYYMMDD, DD/MM/YYYY)
 / Dependencies: none
 
@@ -13,13 +13,13 @@
 / STATE
 / ============================================================================
 
-/ Full catalog — one row per (field x source_field alias). Used for source mapping.
+/ Full catalog - one row per (field x source_field alias). Used for source mapping.
 .catalog.raw:flip `app`table`field`label`type`role`format`enabled`source_field`date_format!10#enlist`$()
 
-/ Unique fields — deduplicated to one row per (app x table x field). Used for UI + validation.
+/ Unique fields - deduplicated to one row per (app x table x field). Used for UI + validation.
 .catalog.fields:flip `app`table`field`label`type`role`format`enabled!8#enlist`$()
 
-/ All fields — like .catalog.fields but ignores enabled flag. Used for ingestion (validate + cast).
+/ All fields - like .catalog.fields but ignores enabled flag. Used for ingestion (validate + cast).
 / Raw tables (e.g. sales_transactions) have enabled=0 to hide from UI but must still be validated.
 .catalog.allFields:flip `app`table`field`label`type`role`format`enabled!8#enlist`$()
 
@@ -27,7 +27,7 @@
 / Keyed by table symbol. Value is a string->symbol dict.
 .catalog.sourceMap:()!()
 
-/ Date format map — keyed by `table`source_field, value is format symbol.
+/ Date format map - keyed by `table`source_field, value is format symbol.
 / Only entries with an explicit date_format in the catalog.
 .catalog.dateFormatMap:()!()
 
@@ -39,16 +39,16 @@
   raw:(("SSSSSSSBSS"; enlist ",") 0: hsym `$path);
   `.catalog.raw set raw;
 
-  / UI fields — enabled=1 only, deduplicated. Used for frontend field picker.
+  / UI fields - enabled=1 only, deduplicated. Used for frontend field picker.
   appRows:select from raw where enabled, app=`$string app;
   `.catalog.fields set 0! select by table, field from appRows;
 
-  / Ingestion fields — all rows for this app, deduplicated. Used for validate + cast.
+  / Ingestion fields - all rows for this app, deduplicated. Used for validate + cast.
   / Includes enabled=0 tables (raw sources hidden from UI but needed for ingestion).
   allAppRows:select from raw where app=`$string app;
   `.catalog.allFields set 0! select by table, field from allAppRows;
 
-  / Build source map — one dict per table, string sourceCol -> canonical symbol.
+  / Build source map - one dict per table, string sourceCol -> canonical symbol.
   / Built at top level (not inside lambda) to correctly update global .catalog.sourceMap.
   tblList:asc distinct exec table from allAppRows;
   smaps:{[rows; tbl]
@@ -64,10 +64,10 @@
   }[allAppRows] each tblList;
   `.catalog.sourceMap set tblList!smaps;
 
-  / Build date format map — keyed by `table`field (canonical), value is format symbol.
+  / Build date format map - keyed by `table`field (canonical), value is format symbol.
   / Cast runs after rename so we key on canonical field name, not source_field.
   / If multiple source aliases for the same field have different date_formats,
-  / the last one wins — this should be avoided in practice (same field = same format).
+  / the last one wins - this should be avoided in practice (same field = same format).
   / Only populated for rows where date_format is explicitly set.
   fmtRows:select from allAppRows where not null date_format, date_format <> `$"";
   fmtKeys:{` sv x} each flip (fmtRows`table; fmtRows`field);
@@ -152,7 +152,7 @@
       s[0 1 2 3],"-",s[4 5],"-",s[6 7];
     (n=10) and (s[2]="/") and (s[5]="/");
       s[6 7 8 9],"-",s[3 4],"-",s[0 1];
-    s   / pass through — "D"$ handles YYYY-MM-DD and YYYY.MM.DD natively
+    s   / pass through - "D"$ handles YYYY-MM-DD and YYYY.MM.DD natively
   ]
  }
 

@@ -3,7 +3,7 @@
 / Dependencies: catalog.q, cache.q
 
 / ============================================================================
-/ INIT — unified startup response
+/ INIT - unified startup response
 / GET /api/sales/init
 / Returns everything the frontend needs on load:
 /   latestAsofDate, defaultPrevDate, catalogFields, filterOptions, presets
@@ -36,7 +36,7 @@
 / ============================================================================
 / CATALOG FIELDS
 / GET /api/sales/catalog/fields (also called by init)
-/ Returns enabled fields — dimensions and measures only (not temporal)
+/ Returns enabled fields - dimensions and measures only (not temporal)
 / ============================================================================
 
 .catHandler.fields:{[params]

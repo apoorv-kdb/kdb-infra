@@ -29,10 +29,10 @@ opts:.Q.opt .z.x;
 .cache.startRefresh[600000];
 
 / ============================================================================
-/ HTTP ROUTES — all prefixed /api/sales/
+/ HTTP ROUTES - all prefixed /api/sales/
 / ============================================================================
 
-/ Init — unified startup response (latestAsofDate, catalogFields, filterOptions, presets)
+/ Init - unified startup response (latestAsofDate, catalogFields, filterOptions, presets)
 .http.addRoute[`GET;  "/api/sales/init";          .catHandler.init];
 
 / Catalog (also available standalone for debugging)

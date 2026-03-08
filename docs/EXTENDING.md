@@ -61,8 +61,8 @@ See `docs/CATALOG.md` for full column reference.
 Create `config/sources_margin.csv`. One row per source file type.
 
 ```csv
-source,refreshUnit,filePattern,dateFrom,dateFormat,dateDelim,delimiter,required
-margin_raw,margin_refresh,margin_*.csv,filename,yyyy-mm-dd,_,",",1
+source,refreshUnit,filePattern,dateFrom,dateFormat,dateDelim,delimiter,required,directory
+margin_raw,margin_refresh,margin_*.csv,filename,yyyy-mm-dd,_,",",1,/data/csv/margin
 ```
 
 **Column reference:**
@@ -83,8 +83,8 @@ Files named `margin_2026-01-27.csv` or `margin_run_2026-01-27.csv` will both wor
 
 **Alternative: `dateFrom:folder`** — if your files arrive pre-sorted into date subdirectories:
 ```csv
-source,refreshUnit,filePattern,dateFrom,dateFormat,dateDelim,delimiter,required
-margin_raw,margin_refresh,margin_*.csv,folder,yyyy-mm-dd,,",",1
+source,refreshUnit,filePattern,dateFrom,dateFormat,dateDelim,delimiter,required,directory
+margin_raw,margin_refresh,margin_*.csv,folder,yyyy-mm-dd,,",",1,/data/csv/margin
 ```
 Files would live at `csvPath/2026-01-27/margin_*.csv`. `dateDelim` is unused for folder mode.
 

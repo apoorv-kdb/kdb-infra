@@ -12,7 +12,7 @@
 / CONFIGURATION
 / ============================================================================
 
-/ Source configuration table — populated by .orchestrator.loadSourcesCsv at startup.
+/ Source configuration table - populated by .orchestrator.loadSourcesCsv at startup.
 / Columns match sources_<app>.csv plus an internal `app` tag.
 .orchestrator.source_config:([]
   source:      `symbol$();
@@ -23,7 +23,8 @@
   dateFrom:    `symbol$();
   dateFormat:  ();
   dateDelim:   `char$();
-  delimiter:   `char$()
+  delimiter:   `char$();
+  directory:   `symbol$()
  );
 
 / RefreshUnit registry: refreshUnit name -> refresh function
@@ -44,7 +45,7 @@
 / The app name is derived from the caller and tagged onto every row.
 / CSV schema: source,refreshUnit,filePattern,dateFrom,dateFormat,dateDelim,delimiter,required
 .orchestrator.loadSourcesCsv:{[filePath; appName]
-  raw:("SSSSSCCB"; enlist ",") 0: hsym `$filePath;
+  raw:("SSSSSCCBS"; enlist ",") 0: hsym `$filePath;
   / Parse required: "1"/"0" or "true"/"false" -> boolean
   reqCol:raw`required;
   n:count raw;
@@ -57,7 +58,8 @@
     dateFrom:    raw`dateFrom;
     dateFormat:  string each raw`dateFormat;
     dateDelim:   raw`dateDelim;
-    delimiter:   raw`delimiter
+    delimiter:   raw`delimiter;
+    directory:   raw`directory
   );
   `.orchestrator.source_config upsert rows;
  }
@@ -75,8 +77,7 @@
 / ============================================================================
 
 .orchestrator.identifyWork:{[]
-  csvPath:hsym `$argCsvPath;
-  scanned:.discovery.identifyWork[.orchestrator.source_config; csvPath];
+  scanned:.discovery.identifyWork[.orchestrator.source_config];
   / Filter out refreshUnit+date combos already completed
   select from scanned where not .ingestionLog.isProcessed'[refreshUnit; date]
  }
@@ -105,6 +106,17 @@
   `.orchestrator.isRunning set 1b;
   `.orchestrator.runCount set .orchestrator.runCount+1;
 
+  / Wrap entire tick in a trap so isRunning is always cleared on exit,
+  / even if an unhandled error escapes from inside.
+  @[.orchestrator.runTick; ::;
+    {[e]
+      show "  [FATAL] Unhandled error in tick: ",string e;
+      show "  isRunning cleared - next tick will proceed normally"}];
+
+  `.orchestrator.isRunning set 0b;
+ }
+
+.orchestrator.runTick:{[]
   show "----------------------------------------";
   show "Orchestrator tick #",string[.orchestrator.runCount]," at ",string .z.p;
 
@@ -112,7 +124,7 @@
   show "[1/4] Discovering work...";
   work:@[.orchestrator.identifyWork; ::;
     {[e]
-      show "  [ERROR] Discovery failed: ",e;
+      show "  [ERROR] Discovery failed: ",string e;
       ([] source:`symbol$(); refreshUnit:`symbol$(); date:`date$(); filepath:`symbol$())}];
   show "  New work items: ",string count work;
 
@@ -121,14 +133,16 @@
     show "[2/4] Grouping by refresh unit...";
     grouped:@[.orchestrator.groupByRefreshUnit; work;
       {[e]
-        show "  [ERROR] Grouping failed: ",e;
+        show "  [ERROR] Grouping failed: ",string e;
         ([] refreshUnit:`symbol$(); date:`date$();
             sources:(); filepaths:(); requiredSources:())}];
 
-    / Phase 3: Dispatch
+    / Phase 3: Dispatch each (refreshUnit, date) independently
     show "[3/4] Dispatching refresh units...";
-    {[grouped; idx]
-      row:(0!grouped) idx;
+    rows:0!grouped;
+    dispIdx:0;
+    while[dispIdx < count rows;
+      row:rows dispIdx;
       ru: row`refreshUnit;
       dt: row`date;
       srcs:row`sources;
@@ -136,8 +150,10 @@
       if[.orchestrator.dependenciesMet[ru; dt; srcs];
         show "  Dispatching ",string[ru]," for ",string dt;
         sourceMap:srcs!fps;
-        .orchestrator.dispatchRefreshUnit[ru; dt; sourceMap]];
-    }[grouped] each til count grouped;
+        .[.orchestrator.dispatchRefreshUnit; (ru; dt; sourceMap);
+          {[ru; dt; e]
+            show "  [ERROR] Dispatch threw for ",string[ru]," ",string[dt],": ",string e}[ru; dt]]];
+      dispIdx+:1];
   ];
 
   / Phase 4: Persist ingestion log
@@ -145,9 +161,13 @@
   @[.ingestionLog.persist; ::;
     {[e] show "  [ERROR] Log persist failed: ",string e}];
 
+  / Summary: surface any persistent failures
+  nFailed:count select from .ingestionLog.tbl where status=`failed;
+  if[0<nFailed;
+    show "  [WARN] ",string[nFailed]," date(s) in failed status - run .ingestionLog.getFailed[] to inspect"];
+
   show "Tick complete.";
   show "----------------------------------------";
-  `.orchestrator.isRunning set 0b;
  }
 
 / ============================================================================
@@ -171,7 +191,7 @@
     :()];
 
   / Build tableCounts from partitions written by this refreshUnit's domain.
-  / Domain is the app name — all tables for that app are prefixed with it.
+  / Domain is the app name - all tables for that app are prefixed with it.
   ruApp:first exec distinct app from .orchestrator.source_config
     where refreshUnit=ru;
   partPath:` sv (.dbWriter.dbPath; `$string dt);
@@ -198,8 +218,7 @@
 / Print what would be dispatched for the given app without executing anything.
 .orchestrator.dryRun:{[appName]
   show "DryRun: app=",string appName;
-  csvPath:hsym `$argCsvPath;
-  scanned:.discovery.identifyWork[.orchestrator.source_config; csvPath];
+  scanned:.discovery.identifyWork[.orchestrator.source_config];
   / Scope to this app's refresh units
   appRUs:exec distinct refreshUnit from .orchestrator.source_config
     where app=appName;
@@ -217,7 +236,7 @@
     srcs:row`sources;
     fps: row`filepaths;
     depOk:.orchestrator.dependenciesMet[ru; dt; srcs];
-    show "  [",($[depOk;"DISPATCH";"BLOCKED — missing required sources"]),"] ",
+    show "  [",($[depOk;"DISPATCH";"BLOCKED - missing required sources"]),"] ",
          string[ru]," | ",string[dt]," | sources: ",", " sv string srcs;
   } each grouped;
  }
@@ -248,22 +267,31 @@
 
 .orchestrator.manualRefresh:{[ru; dt]
   allSources:exec source from .orchestrator.source_config where refreshUnit=ru;
-  csvPath:hsym `$argCsvPath;
-  fps:{[csvPath; src; dt]
-    pat:first exec filePattern from .orchestrator.source_config where source=src;
-    frm:first exec dateFrom   from .orchestrator.source_config where source=src;
-    fmt:first exec dateFormat  from .orchestrator.source_config where source=src;
-    dlm:first exec dateDelim   from .orchestrator.source_config where source=src;
-    files:@[key; csvPath; {[e] `symbol$()}];
-    matched:files where files like string pat;
-    dateMatched:$[frm=`filename;
-      matched where dt=.discovery.extractDateFromFilename[fmt; dlm;] each string matched;
-      matched where dt=.discovery.parseToken[fmt;] each string matched];
-    if[0=count dateMatched; :()];
-    ` sv csvPath,first dateMatched
-  }[csvPath;; dt] each allSources;
+  fps:{[src; dt]
+    pat:first exec filePattern  from .orchestrator.source_config where source=src;
+    frm:first exec dateFrom     from .orchestrator.source_config where source=src;
+    fmt:first exec dateFormat   from .orchestrator.source_config where source=src;
+    dlm:first exec dateDelim    from .orchestrator.source_config where source=src;
+    dir:hsym first exec directory from .orchestrator.source_config where source=src;
+    $[frm=`filename;
+      [files:@[key; dir; {[e] `symbol$()}];
+       matched:files where files like string pat;
+       dateMatched:matched where dt=.discovery.extractDateFromFilename[fmt; dlm;] each string matched;
+       if[0=count dateMatched; :()];
+       ` sv dir,first dateMatched];
+      frm=`folder;
+      [entries:@[key; dir; {[e] `symbol$()}];
+       dtEntries:entries where dt=.discovery.parseToken[fmt;] each string entries;
+       if[0=count dtEntries; :()];
+       subdir:` sv dir,first dtEntries;
+       files:@[key; subdir; {[e] `symbol$()}];
+       matched:files where files like string pat;
+       if[0=count matched; :()];
+       ` sv subdir,first matched];
+      ()]
+  }[; dt] each allSources;
   sourceMap:allSources!fps;
-  sourceMap:sourceMap where not (::)~/: value sourceMap;
+  sourceMap:sourceMap where not ()~/: value sourceMap;
   .orchestrator.dispatchRefreshUnit[ru; dt; sourceMap];
  }
 
@@ -296,14 +324,12 @@ ROOT:rtrim ssr[{$[10h=type x;x;first x]} system "cd"; "\\"; "/"]
 
 opts:.Q.opt .z.x;
 
-argDbPath: $[`dbPath  in key opts; first opts`dbPath;  "C:/data/databases/prod_parallel"];
-argCsvPath:$[`csvPath in key opts; first opts`csvPath; "C:/data/csv"];
+argDbPath:$[`dbPath in key opts; first opts`dbPath; "C:/data/databases/prod_parallel"];
 
 show "========================================";
 show "Loading Orchestrator";
 show "  ROOT:    ",ROOT;
 show "  DB:      ",argDbPath;
-show "  CSV:     ",argCsvPath;
 show "========================================";
 
 / Core infrastructure
@@ -338,7 +364,7 @@ while[appIdx < count appList;
     show "  Loading catalog: ",string app;
     .catalog.load[catPath; `$string app]];
 
-  / Load all .q files in apps/<app>/data_refresh/ — system "l" must run at top level
+  / Load all .q files in apps/<app>/data_refresh/ - system "l" must run at top level
   drRoot:hsym `$ROOT,"/apps/",string[app],"/data_refresh";
   drFiles:@[{x where x like "*.q"}; key drRoot; {[e] `symbol$()}];
   drIdx:0;
@@ -356,13 +382,22 @@ while[appIdx < count appList;
 
   appIdx+:1];
 
+/ Validate: every refreshUnit in source_config must have a registered refresh function
+srcRUs:exec distinct refreshUnit from .orchestrator.source_config;
+regRUs:key .orchestrator.refreshRegistry;
+unmatched:srcRUs where not srcRUs in regRUs;
+if[0<count unmatched;
+  show "  [WARN] RefreshUnits in sources CSV with no registered function: ",", " sv string unmatched;
+  show "  [WARN] Check that data_refresh/*.q files loaded cleanly"];
+
 show "";
 show "========================================";
 show "Orchestrator ready";
-show "  DB:      ",argDbPath;
-show "  CSV:     ",argCsvPath;
+show "  DB:           ",argDbPath;
 show "  RefreshUnits: ",", " sv string key .orchestrator.refreshRegistry;
 show "  Sources:      ",string count .orchestrator.source_config;
+if[0<count unmatched;
+  show "  [WARN] Unmatched: ",", " sv string unmatched];
 show "========================================";
 show "";
 

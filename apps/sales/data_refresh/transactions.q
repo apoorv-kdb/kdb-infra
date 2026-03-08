@@ -1,28 +1,28 @@
 / apps/sales/data_refresh/transactions.q
 / CONTRACT
 /   Called by orchestrator as: .salesCore.refresh[dt; sources]
-/   dt      — date being processed (kdb+ date)
-/   sources — dict of sourceName -> filepath symbol
+/   dt      - date being processed (kdb+ date)
+/   sources - dict of sourceName -> filepath symbol
 /   Must:
 /     1. Load raw CSV via .csv.loadCSV (catalog drives rename + type cast)
 /     2. Validate via .catalog.validate (blocking: missing cols; non-blocking: null counts)
 /     3. Aggregate into cache tables
 /     4. Write each date partition via .dbWriter.writeMultiple
 /     5. Call .dbWriter.reload[]
-/   On failure: signal — orchestrator catches and marks refreshUnit failed.
+/   On failure: signal - orchestrator catches and marks refreshUnit failed.
 /   Log updates (markCompleted, markFailed) are handled entirely by the orchestrator.
 
 .salesCore.refresh:{[dt; sources]
-  / 1. Load — catalog handles rename, drop unmapped, type cast
+  / 1. Load - catalog handles rename, drop unmapped, type cast
   txns:.csv.loadCSV[`sales_transactions; `sales; sources`sales_transactions; ","];
 
-  / 2. Validate — blocking on missing columns, non-blocking on nulls
+  / 2. Validate - blocking on missing columns, non-blocking on nulls
   vr:.catalog.validate[`sales_transactions; txns; `sales];
 
   if[not vr`valid;
     '"validation failed: ",("; " sv vr`errors)];
 
-  / Log null warnings (non-blocking — data still written)
+  / Log null warnings (non-blocking - data still written)
   if[count vr`warnings;
     {show "  [WARN] ",x} each vr`warnings];
 
