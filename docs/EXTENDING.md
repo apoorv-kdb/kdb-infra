@@ -10,15 +10,17 @@ As a worked example, we'll add a **margin app** that ingests daily margin requir
 
 **You write (per app):**
 - `config/catalog_<app>.csv` — field definitions and source aliases
-- `apps/<app>/core/data_refresh.q` — transform raw CSV to aggregated tables
-- `apps/<app>/core/config.q` — register sources with the orchestrator
+- `config/sources_<app>.csv` — source file registration (filePattern, discovery strategy)
+- `apps/<app>/data_refresh/<unit>.q` — transform raw CSV to aggregated tables; self-registers
 - `apps/<app>/server.q` — load catalog, register cache, expose functions
 
 **You don't touch:**
 - `orchestration/orchestrator.q` — auto-discovers new apps, no changes needed
 - `core/` — csv_loader, db_writer, ingestion_log are shared infrastructure
-- `lib/` — catalog, query handlers, filters are all reusable
+- `lib/` — catalog, discovery, query handlers, filters are all reusable
 - `server/` — cache and server_init are shared
+
+There is no `config.q` or `core/` subfolder per app. Source registration is data (`sources_<app>.csv`), not code.
 
 ---
 
@@ -54,16 +56,50 @@ See `docs/CATALOG.md` for full column reference.
 
 ---
 
-## Step 2: Write data_refresh.q
+## Step 2: Define the Sources CSV
 
-Create `apps/margin/core/data_refresh.q`.
+Create `config/sources_margin.csv`. One row per source file type.
+
+```csv
+source,refreshUnit,filePattern,dateFrom,dateFormat,dateDelim,delimiter,required
+margin_raw,margin_refresh,margin_*.csv,filename,yyyy-mm-dd,_,",",1
+```
+
+**Column reference:**
+
+| Column | Purpose |
+|--------|---------|
+| `source` | Logical source name — matches the table name in `catalog_margin.csv` and the key used in `data_refresh.q` |
+| `refreshUnit` | Groups sources that must be processed together; the orchestrator dispatches once per refreshUnit+date |
+| `filePattern` | Glob matched against filenames in the CSV directory |
+| `dateFrom` | Discovery strategy: `filename` or `folder` |
+| `dateFormat` | How to parse the date token: `yyyymmdd`, `yyyy.mm.dd`, or `yyyy-mm-dd` |
+| `dateDelim` | Character used to split the filename before date extraction (only for `dateFrom:filename`) |
+| `delimiter` | Delimiter character inside the source data file |
+| `required` | `1` — refreshUnit won't dispatch without this source present for the target date |
+
+**File naming convention for `dateFrom:filename` with `dateDelim:_` and `dateFormat:yyyy-mm-dd`:**
+Files named `margin_2026-01-27.csv` or `margin_run_2026-01-27.csv` will both work — the orchestrator splits on `_` and tests each token as a date, taking the first valid parse.
+
+**Alternative: `dateFrom:folder`** — if your files arrive pre-sorted into date subdirectories:
+```csv
+source,refreshUnit,filePattern,dateFrom,dateFormat,dateDelim,delimiter,required
+margin_raw,margin_refresh,margin_*.csv,folder,yyyy-mm-dd,,",",1
+```
+Files would live at `csvPath/2026-01-27/margin_*.csv`. `dateDelim` is unused for folder mode.
+
+---
+
+## Step 3: Write data_refresh/<unit>.q
+
+Create `apps/margin/data_refresh/margin_refresh.q`.
 
 The orchestrator calls this as `.marginCore.refresh[dt; sources]` where:
 - `dt` is the date being processed (kdb+ date type)
-- `sources` is a dict of `sourceName -> filepath`
+- `sources` is a dict of `sourceName -> filepath symbol`
 
 ```q
-/ apps/margin/core/data_refresh.q
+/ apps/margin/data_refresh/margin_refresh.q
 
 .marginCore.refresh:{[dt; sources]
   / 1. Load raw CSV — catalog handles rename, drop unmapped, type cast
@@ -72,8 +108,7 @@ The orchestrator calls this as `.marginCore.refresh[dt; sources]` where:
   / 2. Validate — blocking on missing columns, non-blocking on nulls
   vr:.catalog.validate[`margin_raw; raw; `margin];
   if[not vr`valid;
-    .ingestionLog.markFailed[`margin_raw; dt; "; " sv vr`errors];
-    :()];
+    '"validation failed: ",("; " sv vr`errors)];
 
   if[count vr`warnings; {show "  [WARN] ",x} each vr`warnings];
 
@@ -86,8 +121,8 @@ The orchestrator calls this as `.marginCore.refresh[dt; sources]` where:
   / 4. Write partitions
   dates:asc distinct summary`date;
   {[raw; summary; d]
-    rawDay:    select from raw     where date = d;
-    sumDay:    select from summary where date = d;
+    rawDay:    select from raw     where date=d;
+    sumDay:    select from summary where date=d;
     .dbWriter.writeMultiple[`margin_raw`margin_summary!(rawDay; sumDay); d];
   }[raw; summary;] each dates;
 
@@ -95,35 +130,16 @@ The orchestrator calls this as `.marginCore.refresh[dt; sources]` where:
   .dbWriter.reload[];
 
   show "  Ingested ",string[count raw]," rows for ",string[count dates]," dates";
-  .ingestionLog.markCompleted[`margin_raw; first dates; count raw];
  }
-```
 
-The pattern is always the same: load -> validate -> aggregate -> write -> reload.
-
----
-
-## Step 3: Write config.q
-
-Create `apps/margin/core/config.q`.
-
-```q
-/ apps/margin/core/config.q
-
+/ Self-registration — these two lines are mandatory at the bottom of every data_refresh/*.q
 .dbWriter.addDomain[`margin];
-
-csvDir:$[`argCsvPath in key `.; argCsvPath;
-         `csvPath in key .Q.opt .z.x; first (.Q.opt .z.x)`csvPath;
-         "/data/csv"];
-
-.orchestrator.addSources enlist
-  `source`app`required`directory`filePattern`delimiter`frequency!(
-    `margin_raw; `margin; 1b; hsym `$csvDir; `margin_*.csv; ","; `daily);
-
-.orchestrator.registerApp[`margin; .marginCore.refresh];
+.orchestrator.registerRefreshUnit[`margin_refresh; .marginCore.refresh];
 ```
 
-**File pattern:** `margin_*.csv` matches any file starting with `margin_`. Name files `margin_2026.01.27.csv` — the orchestrator extracts the date automatically.
+The pattern is always the same: load → validate → aggregate → write → reload.
+
+**Important:** signal (`'`) on validation failure rather than calling `.ingestionLog.markFailed` directly. The orchestrator catches the signal, marks the refreshUnit failed, and logs the error message. Log management is the orchestrator's responsibility; refresh functions only transform and write.
 
 ---
 
@@ -134,10 +150,8 @@ Create `apps/margin/server.q`. Copy from `apps/sales/server.q` and change the ap
 ```q
 / apps/margin/server.q
 
-ROOT:rtrim {$[10h=type x;x;first x]} system "cd"
+ROOT:rtrim ssr[{$[10h=type x;x;first x]} system "cd"; "\\"; "/"]
 system "l ",ROOT,"/server/server_init.q";
-
-loadDomainConfigs[`margin];
 
 system "l ",ROOT,"/lib/cat_handlers.q";
 system "l ",ROOT,"/lib/query.q";
@@ -165,7 +179,7 @@ Start on its own port:
 q apps/margin/server.q -p 5011 -dbPath /data/databases/prod_parallel
 ```
 
-The orchestrator auto-discovers the app from the `apps/` directory. No changes to `orchestrator.q` needed.
+The orchestrator auto-discovers the app from the `apps/` directory. No changes to shared infrastructure needed.
 
 ---
 
@@ -173,26 +187,60 @@ The orchestrator auto-discovers the app from the `apps/` directory. No changes t
 
 ```
 [ ] 1.  Create config/catalog_<app>.csv
-[ ] 2.  Drop CSV files into /data/csv/ with date in filename
-[ ] 3.  Create apps/<app>/core/data_refresh.q
-[ ] 4.  Create apps/<app>/core/config.q
+[ ] 2.  Create config/sources_<app>.csv
+[ ] 3.  Drop CSV files into /data/csv/ following the filePattern and date convention
+[ ] 4.  Create apps/<app>/data_refresh/<unit>.q with self-registration lines at bottom
 [ ] 5.  Create apps/<app>/server.q
-[ ] 6.  Restart orchestrator — confirm new app in "Apps:" startup output
-[ ] 7.  Confirm orchestrator tick ingests files successfully
-[ ] 8.  Start app server on new port
-[ ] 9.  Confirm .catHandler.fields returns expected fields
-[ ] 10. Confirm .qryHandler.table returns data
+[ ] 6.  Restart orchestrator — confirm new RefreshUnits in startup output
+[ ] 7.  Run .orchestrator.dryRun[`<app>] — verify correct work items identified
+[ ] 8.  Confirm orchestrator tick ingests files successfully
+[ ] 9.  Start app server on new port
+[ ] 10. Confirm .catHandler.fields returns expected fields
+[ ] 11. Confirm .qryHandler.table returns data
+```
+
+---
+
+## Testing Discovery in Isolation
+
+Before running a full orchestrator tick, validate that your source config correctly identifies files:
+
+```q
+/ Load discovery module standalone
+system "l lib/discovery.q"
+
+/ Build a test source config row (mirroring your sources_<app>.csv)
+testSrc:([]
+  source:      enlist `margin_raw;
+  refreshUnit: enlist `margin_refresh;
+  app:         enlist `margin;
+  required:    enlist 1b;
+  filePattern: enlist `margin_*.csv;
+  dateFrom:    enlist `filename;
+  dateFormat:  enlist `yyyy-mm-dd;
+  dateDelim:   enlist "_";
+  delimiter:   enlist ","
+ );
+
+/ Run discovery against your actual CSV directory
+work:.discovery.identifyWork[testSrc; hsym `$/data/csv]
+
+/ Inspect
+count work
+work
+```
+
+If `work` is empty, check that filenames match `filePattern` and that a date token parses correctly:
+```q
+.discovery.extractDateFromFilename[`yyyy-mm-dd; "_"; "margin_2026-01-27.csv"]
+/ Should return 2026.01.27, not 0Nd
 ```
 
 ---
 
 ## Common Pitfalls
 
-**Date not in filename** — orchestrator silently skips files where it cannot extract a date. Filename must contain `YYYY-MM-DD`, `YYYY_MM_DD`, `YYYY.MM.DD`, or `YYYYMMDD`. Test with:
-```q
-.orchestrator.extractDate[`$"yourfilename.csv"]
-```
-Should return a date, not `0Nd`.
+**No files found by discovery** — verify `filePattern` matches actual filenames and that `dateDelim`/`dateFormat` correctly extract a date. Test with `.discovery.extractDateFromFilename` or `.discovery.parseToken` directly.
 
 **`tables` is a reserved word in q** — never use as a local variable. Use `tblList`, `tblNames`, etc.
 
@@ -207,7 +255,9 @@ Should return a date, not `0Nd`.
 
 **Prev date not in database** — `.qryHandler.table` returns `prevValue:0` if the prev date has no data. Confirm both test dates are within the ingested range.
 
-**Domain not registered** — `db_writer.q` enforces naming convention: table names must start with a registered domain. Call `.dbWriter.addDomain` in `config.q` before writing.
+**Domain not registered** — `db_writer.q` enforces naming convention: table names must start with a registered domain. The `.dbWriter.addDomain[`appname]` line at the bottom of `data_refresh/<unit>.q` handles this. If missing, writes will fail with a type error.
+
+**sources_<app>.csv not found** — the orchestrator looks for `config/sources_<app>.csv` relative to ROOT. If missing, no sources are registered and the app's refresh units are unreachable.
 
 ---
 
@@ -281,7 +331,7 @@ Estimated effort: 2-3 days. LDAP integration is the main variable.
 
 ## Troubleshooting a Data Refresh
 
-The orchestrator is just a scheduler. Everything meaningful happens in `data_refresh.q`. You can test your refresh function completely independently of the orchestrator — and you should, before letting the orchestrator call it.
+The orchestrator is just a scheduler. Everything meaningful happens in `data_refresh/<unit>.q`. You can test your refresh function completely independently of the orchestrator — and you should, before letting the orchestrator call it.
 
 ### Step 1 — Check the ingestion log
 
@@ -298,12 +348,12 @@ select from .ingestionLog.tbl where status=`failed
 If entries are in `failed` status, reset them before retrying — otherwise the orchestrator will skip them as already processed:
 
 ```q
-/ Reset one date
-.orchestrator.resetSource[`your_source; 2026.01.27]
+/ Reset one refreshUnit+date
+.orchestrator.resetSource[`transactions; 2026.01.27]
 
-/ Reset all failed dates
-failed:exec distinct date from .ingestionLog.tbl where status=`failed;
-.orchestrator.resetSource[`your_source;] each failed
+/ Reset all failed
+failed:exec distinct (refreshUnit; date) from .ingestionLog.tbl where status=`failed;
+.orchestrator.resetSource'[failed]
 ```
 
 ---
@@ -316,11 +366,11 @@ Pull the filepath from the ingestion log and call your refresh function manually
 / Get a failed entry
 r:first select from .ingestionLog.tbl where status=`failed
 
-/ Build sourceMap
-sm:(enlist r`source)!enlist r`filepath
+/ Build sourceMap (use actual filepath for this refreshUnit)
+sm:(enlist `margin_raw)!enlist hsym `$"/data/csv/margin_2026-01-27.csv"
 
 / Call refresh directly — full error visible here
-.yourApp.refresh[r`date; sm]
+.marginCore.refresh[r`date; sm]
 ```
 
 ---
@@ -331,23 +381,24 @@ If the refresh function errors, test each step individually:
 
 ```q
 / Test CSV load
-txns:.csv.loadCSV[`your_raw_table; `yourapp; sm`your_raw_table; ","]
-count txns
-cols txns
-meta txns
+raw:.csv.loadCSV[`margin_raw; `margin; sm`margin_raw; ","]
+count raw
+cols raw
+meta raw
 
 / Test catalog validation
-vr:.catalog.validate[`your_raw_table; txns; `yourapp]
+vr:.catalog.validate[`margin_raw; raw; `margin]
 vr`valid
 vr`errors
 
 / Test aggregation (paste your aggregation logic directly)
-agg:0! select total_x:sum x by date, dim from txns
+agg:0! select im_requirement:sum im_requirement, vm_requirement:sum vm_requirement
+  by date, desk, portfolio from raw
 count agg
 
 / Test write for one date
 d:first asc distinct agg`date
-.dbWriter.writeMultiple[`your_summary!enlist select from agg where date=d; d]
+.dbWriter.writeMultiple[`margin_summary!enlist select from agg where date=d; d]
 ```
 
 ---
@@ -356,8 +407,7 @@ d:first asc distinct agg`date
 
 - **Embedded commas in CSV fields** — `csv_loader.q` handles quoted fields (e.g. `"Smith, John"`). Unquoted commas in fields are ambiguous and cannot be parsed — fix at source or use a different delimiter.
 - **Column count mismatch** — header has N columns but a data row has N+1 or N-1. Check `count "," vs each read0 fp` to find the offending rows.
-- **Trailing slash in csvDir** — if `csvDir` ends with `/`, file paths get a double slash. Strip it in `config.q`: `csvDir:$[last[csvDir]="/"; -1_csvDir; csvDir]`.
-- **Empty aggregation** — if the CSV loads but has no rows matching the date filter, the aggregation returns empty and downstream writes fail. Check `count txns` after load.
+- **Empty aggregation** — if the CSV loads but has no rows matching the date filter, the aggregation returns empty and downstream writes fail. Check `count raw` after load.
 
 ---
 
@@ -365,7 +415,7 @@ d:first asc distinct agg`date
 
 ### Skipping the catalog for clean sources
 
-If your source CSV already uses clean, consistent column names matching your canonical field names, you don't need to catalog the raw table. Load directly in `data_refresh.q`:
+If your source CSV already uses clean, consistent column names matching your canonical field names, you don't need to catalog the raw table. Load directly in `data_refresh/<unit>.q`:
 
 ```q
 / Load with explicit type string — no catalog involvement
@@ -373,7 +423,8 @@ raw:("DSSFF"; enlist ",") 0: sources`your_source;
 
 / Validate manually
 missing:`date`desk`revenue where not (`date`desk`revenue) in cols raw;
-if[count missing; .ingestionLog.markFailed[`your_source; dt; "Missing: ",", " sv string missing]; :()];
+if[count missing;
+  '"missing columns: ",", " sv string missing];
 
 / Aggregate and write as normal
 ```
@@ -382,6 +433,6 @@ Only catalog the aggregated output table (`enabled=1`). The raw source never tou
 
 ### Derived table catalog is currently manual
 
-Today you write catalog entries for both the raw source table and the aggregated output table. The derived table entries are boilerplate — the field names, types, and roles are implied by the aggregation logic in `data_refresh.q`.
+Today you write catalog entries for both the raw source table and the aggregated output table. The derived table entries are boilerplate — the field names, types, and roles are implied by the aggregation logic in `data_refresh/<unit>.q`.
 
-This is a known limitation. A future improvement will infer or scaffold the derived table catalog from the raw source catalog and aggregation declarations, so developers only need to fill in `label` and `format`. For now: copy field names from your aggregation, set `enabled=1`, inherit types from the corresponding raw fields.
+This is a known limitation. A future improvement will infer or scaffold the derived table catalog from the raw source catalog and aggregation declarations. For now: copy field names from your aggregation, set `enabled=1`, inherit types from the corresponding raw fields.

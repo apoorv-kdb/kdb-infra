@@ -5,9 +5,6 @@
 ROOT:rtrim ssr[{$[10h=type x;x;first x]} system "cd"; "\\"; "/"]
 system "l ",ROOT,"/server/server_init.q";
 
-/ Load domain configs (registers sources, orchestrator stubs)
-loadDomainConfigs[`sales];
-
 / ============================================================================
 / APP-SPECIFIC MODULES
 / ============================================================================

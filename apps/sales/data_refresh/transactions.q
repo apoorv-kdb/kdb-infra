@@ -1,15 +1,16 @@
-/ apps/sales/core/data_refresh.q
+/ apps/sales/data_refresh/transactions.q
 / CONTRACT
 /   Called by orchestrator as: .salesCore.refresh[dt; sources]
 /   dt      — date being processed (kdb+ date)
-/   sources — dict of sourceName -> filepath string
+/   sources — dict of sourceName -> filepath symbol
 /   Must:
 /     1. Load raw CSV via .csv.loadCSV (catalog drives rename + type cast)
 /     2. Validate via .catalog.validate (blocking: missing cols; non-blocking: null counts)
 /     3. Aggregate into cache tables
 /     4. Write each date partition via .dbWriter.writeMultiple
 /     5. Call .dbWriter.reload[]
-/   On failure: call .ingestionLog.markFailed, return (::)
+/   On failure: signal — orchestrator catches and marks refreshUnit failed.
+/   Log updates (markCompleted, markFailed) are handled entirely by the orchestrator.
 
 .salesCore.refresh:{[dt; sources]
   / 1. Load — catalog handles rename, drop unmapped, type cast
@@ -19,8 +20,7 @@
   vr:.catalog.validate[`sales_transactions; txns; `sales];
 
   if[not vr`valid;
-    .ingestionLog.markFailed[`sales_transactions; dt; "; " sv vr`errors];
-    :()];
+    '"validation failed: ",("; " sv vr`errors)];
 
   / Log null warnings (non-blocking — data still written)
   if[count vr`warnings;
@@ -35,8 +35,8 @@
   / 4. Write each distinct date to its own partition
   dates:asc distinct byRegion`date;
   {[txns; byRegion; d]
-    txnDay:select from txns    where date = d;
-    regDay:select from byRegion where date = d;
+    txnDay:select from txns    where date=d;
+    regDay:select from byRegion where date=d;
     .dbWriter.writeMultiple[`sales_transactions`sales_by_region!(txnDay; regDay); d];
   }[txns; byRegion;] each dates;
 
@@ -44,9 +44,9 @@
   .dbWriter.reload[];
 
   show "  Ingested ",string[count txns]," rows for ",string[count dates]," dates";
-  / Mark each date completed with its own row count
-  {[txns; src; d]
-    n:count select from txns where date = d;
-    .ingestionLog.markCompleted[src; d; n; ()]
-  }[txns; `sales_transactions] each dates;
  }
+
+/ Register domain and refresh unit with the orchestrator.
+/ These two lines are the only addition vs the original data_refresh.q.
+.dbWriter.addDomain[`sales];
+.orchestrator.registerRefreshUnit[`transactions; .salesCore.refresh];

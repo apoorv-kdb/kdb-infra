@@ -1,0 +1,2 @@
+source,refreshUnit,filePattern,dateFrom,dateFormat,dateDelim,delimiter,required
+sales_transactions,transactions,sales_transactions_*.csv,filename,yyyy-mm-dd,_,",",1

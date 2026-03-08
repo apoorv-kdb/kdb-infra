@@ -16,7 +16,7 @@ CSV files (/data/csv/)
         ▼
   ┌─────────────┐
   │ Orchestrator│  port 8000
-  │  (q process)│  scans, validates, ingests on timer
+  │  (q process)│  discovers, validates, ingests on timer
   └──────┬──────┘
          │ writes partitioned HDB
          ▼
@@ -89,19 +89,22 @@ The catalog drives four things without any code changes:
 ## Data Flow: Ingestion
 
 ```
-1. Orchestrator scans CSV directory on timer (default: 1 hour)
-2. Extracts date from filename (expects YYYY-MM-DD, YYYY_MM_DD, or YYYYMMDD pattern)
-3. Checks ingestion log — skips already-processed source+date combinations
-4. For each unprocessed file:
+1. Orchestrator runs .discovery.identifyWork on timer (default: 1 hour)
+2. Discovery resolves each source's dateFrom strategy:
+   - dateFrom:folder   — subdir name is parsed as the date; files matched inside
+   - dateFrom:filename — filename stripped + split by dateDelim; tokens tested as dates
+3. Filters out source+date combos already in the ingestion log as completed
+4. Groups remaining work by refreshUnit + date
+5. For each (refreshUnit, date) group with dependencies met:
    a. csv_loader.q reads all columns as strings
    b. catalog.q renames source columns to canonical names, drops unmapped columns
    c. catalog.q validates — blocking on missing columns, non-blocking on nulls
    d. catalog.q casts strings to typed columns
-   e. data_refresh.q aggregates (e.g. transactions → by-region summaries)
+   e. data_refresh/<unit>.q aggregates (e.g. transactions → by-region summaries)
    f. db_writer.q writes each partition to disk
    g. db_writer.q calls .Q.en to enumerate symbols
-5. Ingestion log records completion for each source+date
-6. App servers pick up new data on their next cache refresh (default: 10 minutes)
+6. Orchestrator computes per-table row counts and writes the ingestion log entry
+7. App servers pick up new data on their next cache refresh (default: 10 minutes)
 ```
 
 ---
@@ -126,45 +129,97 @@ The query layer never touches the partitioned database directly during serving �
 ```
 kdb-infra/
 ├── orchestration/
-│   └── orchestrator.q          Central ingestion loop
+│   └── orchestrator.q              Central ingestion loop
 ├── apps/
 │   └── sales/
-│       ├── core/
-│       │   ├── data_refresh.q  Transform: raw → aggregated tables
-│       │   └── config.q        Register sources + app with orchestrator
-│       └── server.q            App server: cache + function exposure
-├── core/                       Shared infrastructure
-│   ├── csv_loader.q            Read CSV → typed table using catalog
-│   ├── db_writer.q             Write partitions to HDB
-│   └── ingestion_log.q         Track processed source+date pairs
-├── lib/                        Reusable analytical primitives
-│   ├── catalog.q               Load catalog, rename, validate, cast
-│   ├── query.q                 Movement, spot, trend query handlers
-│   ├── cat_handlers.q          Field and filter-option query functions
-│   ├── filters.q               Include/exclude filter application
-│   ├── dates.q                 Date arithmetic utilities
-│   ├── comparison.q            Period-over-period delta (stub)
-│   ├── hierarchy.q             Parent-child flattening (stub)
-│   ├── rolling.q               Moving averages and windows (stub)
-│   ├── pivot.q                 Long-to-wide reshaping (stub)
-│   └── temporal_join.q         Point-in-time aj wrappers (stub)
-├── server/                     Shared server infrastructure
-│   ├── cache.q                 In-memory table cache with refresh timer
-│   └── server_init.q           Load sequence for app servers
+│       ├── data_refresh/
+│       │   └── transactions.q      Transform + register refreshUnit with orchestrator
+│       └── server.q                App server: cache + function exposure
+├── core/                           Shared infrastructure
+│   ├── csv_loader.q                Read CSV → typed table using catalog
+│   ├── db_writer.q                 Write partitions to HDB
+│   └── ingestion_log.q             Track processed refreshUnit+date pairs
+├── lib/                            Reusable analytical primitives
+│   ├── discovery.q                 File discovery (folder + filename strategies)
+│   ├── catalog.q                   Load catalog, rename, validate, cast
+│   ├── query.q                     Movement, spot, trend query handlers
+│   ├── cat_handlers.q              Field and filter-option query functions
+│   ├── filters.q                   Include/exclude filter application
+│   ├── dates.q                     Date arithmetic utilities
+│   ├── comparison.q                Period-over-period delta (stub)
+│   ├── hierarchy.q                 Parent-child flattening (stub)
+│   ├── rolling.q                   Moving averages and windows (stub)
+│   ├── pivot.q                     Long-to-wide reshaping (stub)
+│   └── temporal_join.q             Point-in-time aj wrappers (stub)
+├── server/                         Shared server infrastructure
+│   ├── cache.q                     In-memory table cache with refresh timer
+│   └── server_init.q               Load sequence for app servers
 └── config/
-    └── catalog_sales.csv       Field definitions for sales app
+    ├── catalog_sales.csv           Field definitions for sales app
+    └── sources_sales.csv           Source file registration for sales app
 ```
+
+### Per-App File Layout
+
+Each application contributes exactly two types of config files plus its server:
+
+```
+apps/<app>/
+├── data_refresh/
+│   └── <unit>.q    Transform logic — self-registers via:
+│                     .dbWriter.addDomain[`<app>]
+│                     .orchestrator.registerRefreshUnit[`<unit>; .<ns>.refresh]
+└── server.q        App server — cache + function exposure
+
+config/
+├── catalog_<app>.csv    Field definitions (rename, validate, cast, expose)
+└── sources_<app>.csv    Source file registration (filePattern, dateFrom, etc.)
+```
+
+There is no `config.q` or `core/` subfolder per app. Source registration is data, not code.
 
 ---
 
 ## The Ingestion Log
 
-The ingestion log prevents double-processing. Every source+date combination is recorded with status (`processing`, `completed`, `failed`), row count, and any warnings. It is persisted to the HDB as `infra_ingestion_log` partitions, so it survives orchestrator restarts.
+The ingestion log prevents double-processing. Every **refreshUnit+date** combination is recorded with status (`processing`, `completed`, `failed`), a per-table row count dict, and any warnings. It is persisted to the HDB as `infra_ingestion_log` partitions, so it survives orchestrator restarts.
 
-To force reprocessing of a specific source+date:
-```q
-.orchestrator.resetSource[`sales_transactions; 2026.01.27]
+Log shape:
 ```
+refreshUnit | date       | status    | tableCounts                                    | warnings | startTime | endTime
+transactions| 2026.01.27 | completed | sales_transactions:207, sales_by_region:5 | ""       | ...       | ...
+```
+
+To force reprocessing of a specific refreshUnit+date:
+```q
+.orchestrator.resetSource[`transactions; 2026.01.27]
+```
+
+---
+
+## File Discovery
+
+`lib/discovery.q` handles all file scanning. Two strategies are available per source, selected by the `dateFrom` column in `sources_<app>.csv`:
+
+**`dateFrom:filename`** (most common) — files live flat in the CSV directory. The date is encoded in the filename. The source config specifies `dateDelim` (the character used to split the filename) and `dateFormat` (how to parse the date token). Example: `sales_transactions_2026-01-27.csv` with `dateDelim:_` and `dateFormat:yyyy-mm-dd` extracts `2026.01.27`.
+
+**`dateFrom:folder`** — files are organised into date-named subdirectories (`2026.01.27/`, `2026-01-27/`, `20260127/`). The subdir name is parsed as the date; files matching `filePattern` inside it are the work items. Useful when multiple sources share the same date folder.
+
+Supported `dateFormat` values: `` `yyyymmdd ``, `` `yyyy.mm.dd ``, `` `yyyy-mm-dd ``.
+
+---
+
+## Source Registration: CSV-Driven
+
+Sources are registered via `config/sources_<app>.csv` — no q code needed. Schema:
+
+```
+source,refreshUnit,filePattern,dateFrom,dateFormat,dateDelim,delimiter,required
+```
+
+The orchestrator loads this CSV at startup, resolves the CSV directory from `argCsvPath`, and passes the merged config to `lib/discovery.q` on every tick.
+
+The `refreshUnit` column groups sources that must be processed together. A refreshUnit won't dispatch until all its `required=1` sources are present for that date.
 
 ---
 

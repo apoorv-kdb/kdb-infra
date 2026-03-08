@@ -1,4 +1,4 @@
-/ server_init.q
+/ server/server_init.q
 / Loads core infrastructure only.
 / Each app server explicitly loads what it needs beyond this baseline.
 / Dependencies: none
@@ -29,35 +29,6 @@ system "l ",ROOT,"/lib/dates.q";
 / Server infrastructure
 system "l ",ROOT,"/server/cache.q";
 system "l ",ROOT,"/server/http.q";
-
-/ Stubs so app config.q loads cleanly in server context
-if[not `orchestrator in key `.;
-  .orchestrator.addSources:{[x]};
-  .orchestrator.registerApp:{[x;y]}];
-
-if[not `ingestionLog in key `.;
-  .ingestionLog.init:{[]};
-  .ingestionLog.markCompleted:{[a;b;c;d]};
-  .ingestionLog.markFailed:{[a;b;c]}];
-
-/ ============================================================================
-/ DOMAIN CONFIG LOADER
-/ ============================================================================
-
-loadDomainConfigs:{[dom]
-  domainPath:ROOT,"/apps/",string dom;
-  if[() ~ @[key; hsym `$domainPath; {[e] ()}];
-    show "Domain path not found: ",domainPath; :()];
-  entries:key hsym `$domainPath;
-  entries:entries where not null entries;
-  entries:entries where not entries in `.gitkeep`server.q;
-  {[domainPath; entry]
-    configFile:domainPath,"/",string[entry],"/config.q";
-    if[not () ~ @[key; hsym `$configFile; {[e] ()}];
-      show "  Loading ",configFile;
-      @[system; "l ",configFile; {[e] show "    [WARN] Failed: ",e}]];
-  }[domainPath] each entries;
- }
 
 / ============================================================================
 / INIT

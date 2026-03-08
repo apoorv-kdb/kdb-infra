@@ -6,7 +6,7 @@ A multi-application analytics platform built on KDB+/q. Designed to support fina
 
 ## Architecture in One Paragraph
 
-CSV files land in a watched directory. An orchestrator process scans on a timer, validates files against a metadata catalog, transforms and aggregates the data, and writes partitions to a shared KDB+ historical database. Each application runs its own server process that loads from the shared database into an in-memory cache and exposes query functions to consuming frontends. A catalog CSV per application drives column mapping, type casting, validation, and field metadata — adding a new data source or accepting a new column alias requires only a catalog edit, no code changes.
+CSV files land in a watched directory. An orchestrator process scans on a timer, uses `lib/discovery.q` to match files to registered sources, validates files against a metadata catalog, transforms and aggregates the data, and writes partitions to a shared KDB+ historical database. Each application runs its own server process that loads from the shared database into an in-memory cache and exposes query functions to consuming frontends. A catalog CSV per application drives column mapping, type casting, validation, and field metadata — adding a new data source or accepting a new column alias requires only a catalog edit, no code changes.
 
 For a full design walkthrough see [ARCHITECTURE.md](ARCHITECTURE.md).
 
@@ -27,9 +27,9 @@ kdb-infra/
 ├── orchestration/      Central ingestion loop
 ├── apps/sales/         Sales application (reference implementation)
 ├── core/               Shared ingestion infrastructure
-├── lib/                Reusable analytical primitives
+├── lib/                Reusable analytical primitives (incl. discovery.q)
 ├── server/             Shared server infrastructure
-├── config/             Catalog CSV files
+├── config/             Catalog and source CSV files
 └── docs/               Extended documentation
 ```
 
@@ -67,16 +67,23 @@ q orchestration/orchestrator.q -p 8000 -dbPath /data/databases/prod_parallel -cs
 
 On startup you should see:
 ```
-Apps:    sales_core
-Sources: 1
+RefreshUnits: transactions
+Sources:      1
 ```
 
 The orchestrator immediately runs its first scan. Watch for:
 ```
-[OK] sales_core completed for 2026.01.27 (207 total rows)
+[OK] transactions completed for 2026.01.27 (sales_transactions:207, sales_by_region:5)
 ```
 
-### 3. Start the sales app server
+### 3. Preview before running (optional)
+
+```q
+.orchestrator.dryRun[`sales]
+/ prints what would dispatch without executing anything
+```
+
+### 4. Start the sales app server
 
 In a new terminal:
 ```bash
@@ -95,15 +102,20 @@ Sales server ready
 
 See [docs/EXTENDING.md](docs/EXTENDING.md) for the full step-by-step guide with a worked example.
 
-The short version: write a catalog CSV, a `data_refresh.q`, a `config.q`, and a `server.q`. The orchestrator auto-discovers new apps — no changes to shared infrastructure needed.
+The short version: write a catalog CSV (`catalog_<app>.csv`), a sources CSV (`sources_<app>.csv`), a `data_refresh/<unit>.q` with self-registration lines at the bottom, and a `server.q`. The orchestrator auto-discovers new apps — no changes to shared infrastructure needed.
 
 ---
 
 ## Key Operations
 
+**Preview pending work without executing:**
+```q
+.orchestrator.dryRun[`sales]
+```
+
 **Force reprocessing a date:**
 ```q
-.orchestrator.resetSource[`sales_transactions; 2026.01.27]
+.orchestrator.resetSource[`transactions; 2026.01.27]
 ```
 
 **Check orchestrator status:**
@@ -137,15 +149,16 @@ The short version: write a catalog CSV, a `data_refresh.q`, a `config.q`, and a 
 | `orchestration/orchestrator.q` | Timer-driven ingestion loop |
 | `core/csv_loader.q` | Read CSV → typed table using catalog |
 | `core/db_writer.q` | Write and reload HDB partitions |
-| `core/ingestion_log.q` | Track processed source+date pairs |
+| `core/ingestion_log.q` | Track processed refreshUnit+date pairs |
+| `lib/discovery.q` | File discovery — folder and filename strategies |
 | `lib/catalog.q` | Load catalog, rename, validate, cast |
 | `lib/query.q` | Movement, spot, trend query handlers |
 | `lib/cat_handlers.q` | Catalog query functions (fields, filter options) |
 | `server/cache.q` | In-memory table cache with refresh timer |
 | `server/server_init.q` | Shared server load sequence |
 | `config/catalog_sales.csv` | Field definitions for sales app |
-| `apps/sales/core/data_refresh.q` | Sales transform logic |
-| `apps/sales/core/config.q` | Sales source registration |
+| `config/sources_sales.csv` | Source file registration for sales app |
+| `apps/sales/data_refresh/transactions.q` | Sales transform + refreshUnit registration |
 | `apps/sales/server.q` | Sales server — cache + function exposure |
 
 ---
